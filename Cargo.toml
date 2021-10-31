@@ -13,3 +13,6 @@ features = ["use-vcpkg", "static-link"]
 dependencies = ["sdl2"]
 git = "https://github.com/microsoft/vcpkg"
 rev = "5568f110b509a9fd90711978a7cb76bae75bb092"
+
+[package.metadata.vcpkg.target]
+x86_64-pc-windows-msvc = { triplet = "x64-windows-static-md" }
