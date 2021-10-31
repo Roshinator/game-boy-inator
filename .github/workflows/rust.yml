@@ -13,9 +13,9 @@ jobs:
   build-linux:
 
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
+    - run: rustup update
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -27,6 +27,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - run: rustup update
     - name: Build
       run: cargo build --release --verbose
     - name: Run tests
@@ -38,6 +39,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - run: rustup update
     - name: Build
       run: cargo build --release --verbose
     - name: Run tests
