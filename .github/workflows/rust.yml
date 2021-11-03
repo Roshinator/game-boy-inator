@@ -16,9 +16,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: update dependencies
-      run: rustup update && cargo install cargo-vcpkg
+      run: rustup update
     - name: Build
-      run: cargo vcpkg build && cargo build --release --verbose
+      run: cargo build --release --verbose
     - name: Run tests
       run: cargo test --release --verbose
 
@@ -29,9 +29,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: update dependencies
-      run: rustup update && cargo install cargo-vcpkg
+      run: rustup update
     - name: Build
-      run: cargo vcpkg build && cargo build --release --verbose
+      run: cargo build --release --verbose
     - name: Run tests
       run: cargo test --release --verbose
 
@@ -42,8 +42,8 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: update dependencies
-      run: rustup update && cargo install cargo-vcpkg
+      run: rustup update
     - name: Build
-      run: cargo vcpkg build && cargo build --release --verbose
+      run: cargo build --release --verbose
     - name: Run tests
       run: cargo test --release --verbose
