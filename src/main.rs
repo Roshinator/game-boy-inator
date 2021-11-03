@@ -5,10 +5,9 @@ use std::time::Duration;
 use std::thread;
 
 mod game_boy_hardware;
-use game_boy_hardware::cpu::CPU;
 fn main()
 {
-    let x: CPU;
+//     let x: CPU;
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
