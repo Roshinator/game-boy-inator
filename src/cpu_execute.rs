@@ -262,7 +262,7 @@ mod game_boy_hardware
                 0x00FD => {},
                 0x00FE => {},
                 0x00FF => {},
-                0x0000 => {},
+                0xCB00 => {},
                 0xCB01 => {},
                 0xCB02 => {},
                 0xCB03 => {},
