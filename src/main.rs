@@ -7,7 +7,7 @@ use std::thread;
 mod game_boy_hardware;
 fn main()
 {
-//     let x: CPU;
+    // let x: game_boy_hardware::cpu::CPU;
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 

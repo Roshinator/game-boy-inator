@@ -1,9 +1,6 @@
-
-use std::slice::SliceIndex;
-
-use super::ram::{self, RAM};
-
+use super::ram::{RAM};
 use usize as Reg;
+
 const Reg_A:Reg = 0;
 const Reg_B:Reg = 1;
 const Reg_C:Reg = 2;
@@ -13,6 +10,12 @@ const Reg_F:Reg = 5;
 const Reg_H:Reg = 6;
 const Reg_L:Reg = 7;
 //in an AF situation, A is msh, F is lsh, little endian
+
+use u8 as Flag;
+const Flag_Z:Flag = 7;
+const Flag_N:Flag = 6;
+const Flag_H:Flag = 5;
+const Flag_C:Flag = 4;
 
 pub struct CPU
 {
@@ -24,6 +27,24 @@ pub struct CPU
 
 impl CPU
 {
+    //Format [name]_[param1]_[param2]
+    //r is a register
+    //a means parameter is an address (dereference)
+
+    #[inline]
+    fn aux_read_flag(&self, param: Flag) -> bool
+    {
+        return (self.regs[Reg_F].to_le() & u8::to_le(1 << param)) > 0;
+    }
+
+    #[inline]
+    fn aux_write_flag(&mut self, param: Flag, data: bool)
+    {
+        let x = data as u8;
+        assert!(x == 0 || x == 1);
+        return self.regs[Reg_F] = self.regs[Reg_F].to_le() & u8::to_le(!(!x << param));
+    }
+
     #[inline]
     fn ld_r16_16(&mut self, msh: Reg, lsh: Reg, p2: u16)
     {
@@ -62,7 +83,6 @@ impl CPU
     {
         self.ram.writeToAddress(u16::from_le_bytes([self.regs[msh], self.regs[lsh]]) as usize, self.regs[p2]);
     }
-
 
     fn execute(&mut self)
     {
