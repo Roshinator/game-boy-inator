@@ -1,18 +1,18 @@
-pub struct RAM
+pub struct Ram
 {
     mem: [u8;0xFFFF]
 }
 
-impl RAM
+impl Ram
 {
     #[inline]
-    pub fn writeToAddress(&mut self, address: usize, data: u8)
+    pub fn write_to_address(&mut self, address: usize, data: u8)
     {
         self.mem[address] = data
     }
 
     #[inline]
-    pub fn readFromAddress(&self, address: usize) -> u8
+    pub fn read_from_address(&self, address: usize) -> u8
     {
         self.mem[address]
     }

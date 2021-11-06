@@ -1,31 +1,31 @@
-use super::ram::{RAM};
-use usize as Reg;
+use super::ram::{Ram};
 
-const Reg_A:Reg = 0;
-const Reg_B:Reg = 1;
-const Reg_C:Reg = 2;
-const Reg_D:Reg = 3;
-const Reg_E:Reg = 4;
-const Reg_F:Reg = 5;
-const Reg_H:Reg = 6;
-const Reg_L:Reg = 7;
+use usize as Reg;
+const REG_A:Reg = 0;
+const REG_B:Reg = 1;
+const REG_C:Reg = 2;
+const REG_D:Reg = 3;
+const REG_E:Reg = 4;
+const REG_F:Reg = 5;
+const REG_H:Reg = 6;
+const REG_L:Reg = 7;
 //in an AF situation, A is msh, F is lsh, little endian
 
 use u8 as Flag;
-const Flag_Z:Flag = 7;
-const Flag_N:Flag = 6;
-const Flag_H:Flag = 5;
-const Flag_C:Flag = 4;
+const FLAG_Z:Flag = 7;
+const FLAG_N:Flag = 6;
+const FLAG_H:Flag = 5;
+const FLAG_C:Flag = 4;
 
-pub struct CPU
+pub struct Cpu
 {
     regs: [u8;8],
     pc: u16,
     sp: u16,
-    ram: RAM
+    ram: Ram
 }
 
-impl CPU
+impl Cpu
 {
     //Format [name]_[param1]_[param2]
     //r is a register
@@ -34,7 +34,7 @@ impl CPU
     #[inline]
     fn aux_read_flag(&self, param: Flag) -> bool
     {
-        return (self.regs[Reg_F].to_le() & u8::to_le(1 << param)) > 0;
+        (self.regs[REG_F].to_le() & u8::to_le(1 << param)) > 0
     }
 
     #[inline]
@@ -42,7 +42,7 @@ impl CPU
     {
         let x = data as u8;
         assert!(x == 0 || x == 1);
-        return self.regs[Reg_F] = self.regs[Reg_F].to_le() & u8::to_le(!(!x << param));
+        self.regs[REG_F] = self.regs[REG_F].to_le() & u8::to_le(!(!x << param))
     }
 
     #[inline]
@@ -56,7 +56,7 @@ impl CPU
     #[inline]
     fn ld_r16a_8(&mut self, msh: Reg, lsh: Reg, p2: u8)
     {
-        self.ram.writeToAddress(u16::from_le_bytes([self.regs[msh], self.regs[lsh]]) as usize, p2);
+        self.ram.write_to_address(u16::from_le_bytes([self.regs[msh], self.regs[lsh]]) as usize, p2);
     }
 
     #[inline]
@@ -74,14 +74,14 @@ impl CPU
     #[inline]
     fn ld_r8_r16a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let x = self.ram.readFromAddress(u16::from_le_bytes([self.regs[msh], self.regs[lsh]]) as usize);
+        let x = self.ram.read_from_address(u16::from_le_bytes([self.regs[msh], self.regs[lsh]]) as usize);
         self.regs[p1] = x;
     }
 
     #[inline]
     fn ld_r16a_r8(&mut self, msh: Reg, lsh: Reg, p2: Reg)
     {
-        self.ram.writeToAddress(u16::from_le_bytes([self.regs[msh], self.regs[lsh]]) as usize, self.regs[p2]);
+        self.ram.write_to_address(u16::from_le_bytes([self.regs[msh], self.regs[lsh]]) as usize, self.regs[p2]);
     }
 
     fn execute(&mut self)
@@ -152,70 +152,70 @@ impl CPU
             0x003D => {},
             0x003E => {},
             0x003F => {},
-            0x0040 => {self.ld_r8_r8(Reg_B, Reg_B)},
-            0x0041 => {self.ld_r8_r8(Reg_B, Reg_C)},
-            0x0042 => {self.ld_r8_r8(Reg_B, Reg_D)},
-            0x0043 => {self.ld_r8_r8(Reg_B, Reg_E)},
-            0x0044 => {self.ld_r8_r8(Reg_B, Reg_H)},
-            0x0045 => {self.ld_r8_r8(Reg_B, Reg_L)},
-            0x0046 => {self.ld_r8_r16a(Reg_B, Reg_H, Reg_L)},
-            0x0047 => {self.ld_r8_r8(Reg_B, Reg_A)},
-            0x0048 => {self.ld_r8_r8(Reg_C, Reg_B)},
-            0x0049 => {self.ld_r8_r8(Reg_C, Reg_C)},
-            0x004A => {self.ld_r8_r8(Reg_C, Reg_D)},
-            0x004B => {self.ld_r8_r8(Reg_C, Reg_E)},
-            0x004C => {self.ld_r8_r8(Reg_C, Reg_H)},
-            0x004D => {self.ld_r8_r8(Reg_C, Reg_L)},
-            0x004E => {self.ld_r8_r16a(Reg_C, Reg_H, Reg_L)},
-            0x004F => {self.ld_r8_r8(Reg_C, Reg_A)},
-            0x0050 => {self.ld_r8_r8(Reg_D, Reg_B)},
-            0x0051 => {self.ld_r8_r8(Reg_D, Reg_C)},
-            0x0052 => {self.ld_r8_r8(Reg_D, Reg_D)},
-            0x0053 => {self.ld_r8_r8(Reg_D, Reg_E)},
-            0x0054 => {self.ld_r8_r8(Reg_D, Reg_H)},
-            0x0055 => {self.ld_r8_r8(Reg_D, Reg_L)},
-            0x0056 => {self.ld_r8_r16a(Reg_D, Reg_H, Reg_L)},
-            0x0057 => {self.ld_r8_r8(Reg_D, Reg_A)},
-            0x0058 => {self.ld_r8_r8(Reg_E, Reg_B)},
-            0x0059 => {self.ld_r8_r8(Reg_E, Reg_C)},
-            0x005A => {self.ld_r8_r8(Reg_E, Reg_D)},
-            0x005B => {self.ld_r8_r8(Reg_E, Reg_E)},
-            0x005C => {self.ld_r8_r8(Reg_E, Reg_H)},
-            0x005D => {self.ld_r8_r8(Reg_E, Reg_L)},
-            0x005E => {self.ld_r8_r16a(Reg_E, Reg_H, Reg_L)},
-            0x005F => {self.ld_r8_r8(Reg_E, Reg_A)},
-            0x0060 => {self.ld_r8_r8(Reg_H, Reg_B)},
-            0x0061 => {self.ld_r8_r8(Reg_H, Reg_C)},
-            0x0062 => {self.ld_r8_r8(Reg_H, Reg_D)},
-            0x0063 => {self.ld_r8_r8(Reg_H, Reg_E)},
-            0x0064 => {self.ld_r8_r8(Reg_H, Reg_H)},
-            0x0065 => {self.ld_r8_r8(Reg_H, Reg_L)},
-            0x0066 => {self.ld_r8_r16a(Reg_H, Reg_H, Reg_L)},
-            0x0067 => {self.ld_r8_r8(Reg_H, Reg_A)},
-            0x0068 => {self.ld_r8_r8(Reg_L, Reg_B)},
-            0x0069 => {self.ld_r8_r8(Reg_L, Reg_C)},
-            0x006A => {self.ld_r8_r8(Reg_L, Reg_D)},
-            0x006B => {self.ld_r8_r8(Reg_L, Reg_E)},
-            0x006C => {self.ld_r8_r8(Reg_L, Reg_H)},
-            0x006D => {self.ld_r8_r8(Reg_L, Reg_L)},
-            0x006E => {self.ld_r8_r16a(Reg_L, Reg_H, Reg_L)},
-            0x006F => {self.ld_r8_r8(Reg_L, Reg_A)},
-            0x0070 => {self.ld_r16a_r8(Reg_H, Reg_L, Reg_B)},
-            0x0071 => {self.ld_r16a_r8(Reg_H, Reg_L, Reg_C)},
-            0x0072 => {self.ld_r16a_r8(Reg_H, Reg_L, Reg_D)},
-            0x0073 => {self.ld_r16a_r8(Reg_H, Reg_L, Reg_E)},
-            0x0074 => {self.ld_r16a_r8(Reg_H, Reg_L, Reg_H)},
-            0x0075 => {self.ld_r16a_r8(Reg_H, Reg_L, Reg_L)},
+            0x0040 => {self.ld_r8_r8(REG_B, REG_B)},
+            0x0041 => {self.ld_r8_r8(REG_B, REG_C)},
+            0x0042 => {self.ld_r8_r8(REG_B, REG_D)},
+            0x0043 => {self.ld_r8_r8(REG_B, REG_E)},
+            0x0044 => {self.ld_r8_r8(REG_B, REG_H)},
+            0x0045 => {self.ld_r8_r8(REG_B, REG_L)},
+            0x0046 => {self.ld_r8_r16a(REG_B, REG_H, REG_L)},
+            0x0047 => {self.ld_r8_r8(REG_B, REG_A)},
+            0x0048 => {self.ld_r8_r8(REG_C, REG_B)},
+            0x0049 => {self.ld_r8_r8(REG_C, REG_C)},
+            0x004A => {self.ld_r8_r8(REG_C, REG_D)},
+            0x004B => {self.ld_r8_r8(REG_C, REG_E)},
+            0x004C => {self.ld_r8_r8(REG_C, REG_H)},
+            0x004D => {self.ld_r8_r8(REG_C, REG_L)},
+            0x004E => {self.ld_r8_r16a(REG_C, REG_H, REG_L)},
+            0x004F => {self.ld_r8_r8(REG_C, REG_A)},
+            0x0050 => {self.ld_r8_r8(REG_D, REG_B)},
+            0x0051 => {self.ld_r8_r8(REG_D, REG_C)},
+            0x0052 => {self.ld_r8_r8(REG_D, REG_D)},
+            0x0053 => {self.ld_r8_r8(REG_D, REG_E)},
+            0x0054 => {self.ld_r8_r8(REG_D, REG_H)},
+            0x0055 => {self.ld_r8_r8(REG_D, REG_L)},
+            0x0056 => {self.ld_r8_r16a(REG_D, REG_H, REG_L)},
+            0x0057 => {self.ld_r8_r8(REG_D, REG_A)},
+            0x0058 => {self.ld_r8_r8(REG_E, REG_B)},
+            0x0059 => {self.ld_r8_r8(REG_E, REG_C)},
+            0x005A => {self.ld_r8_r8(REG_E, REG_D)},
+            0x005B => {self.ld_r8_r8(REG_E, REG_E)},
+            0x005C => {self.ld_r8_r8(REG_E, REG_H)},
+            0x005D => {self.ld_r8_r8(REG_E, REG_L)},
+            0x005E => {self.ld_r8_r16a(REG_E, REG_H, REG_L)},
+            0x005F => {self.ld_r8_r8(REG_E, REG_A)},
+            0x0060 => {self.ld_r8_r8(REG_H, REG_B)},
+            0x0061 => {self.ld_r8_r8(REG_H, REG_C)},
+            0x0062 => {self.ld_r8_r8(REG_H, REG_D)},
+            0x0063 => {self.ld_r8_r8(REG_H, REG_E)},
+            0x0064 => {self.ld_r8_r8(REG_H, REG_H)},
+            0x0065 => {self.ld_r8_r8(REG_H, REG_L)},
+            0x0066 => {self.ld_r8_r16a(REG_H, REG_H, REG_L)},
+            0x0067 => {self.ld_r8_r8(REG_H, REG_A)},
+            0x0068 => {self.ld_r8_r8(REG_L, REG_B)},
+            0x0069 => {self.ld_r8_r8(REG_L, REG_C)},
+            0x006A => {self.ld_r8_r8(REG_L, REG_D)},
+            0x006B => {self.ld_r8_r8(REG_L, REG_E)},
+            0x006C => {self.ld_r8_r8(REG_L, REG_H)},
+            0x006D => {self.ld_r8_r8(REG_L, REG_L)},
+            0x006E => {self.ld_r8_r16a(REG_L, REG_H, REG_L)},
+            0x006F => {self.ld_r8_r8(REG_L, REG_A)},
+            0x0070 => {self.ld_r16a_r8(REG_H, REG_L, REG_B)},
+            0x0071 => {self.ld_r16a_r8(REG_H, REG_L, REG_C)},
+            0x0072 => {self.ld_r16a_r8(REG_H, REG_L, REG_D)},
+            0x0073 => {self.ld_r16a_r8(REG_H, REG_L, REG_E)},
+            0x0074 => {self.ld_r16a_r8(REG_H, REG_L, REG_H)},
+            0x0075 => {self.ld_r16a_r8(REG_H, REG_L, REG_L)},
             0x0076 => {},
-            0x0077 => {self.ld_r16a_r8(Reg_H, Reg_L, Reg_A)},
-            0x0078 => {self.ld_r8_r8(Reg_A, Reg_B)},
-            0x0079 => {self.ld_r8_r8(Reg_A, Reg_C)},
-            0x007A => {self.ld_r8_r8(Reg_A, Reg_D)},
-            0x007B => {self.ld_r8_r8(Reg_A, Reg_E)},
-            0x007C => {self.ld_r8_r8(Reg_A, Reg_H)},
-            0x007D => {self.ld_r8_r8(Reg_A, Reg_L)},
-            0x007E => {self.ld_r8_r16a(Reg_A, Reg_H, Reg_L)},
-            0x007F => {self.ld_r8_r8(Reg_A, Reg_A)},
+            0x0077 => {self.ld_r16a_r8(REG_H, REG_L, REG_A)},
+            0x0078 => {self.ld_r8_r8(REG_A, REG_B)},
+            0x0079 => {self.ld_r8_r8(REG_A, REG_C)},
+            0x007A => {self.ld_r8_r8(REG_A, REG_D)},
+            0x007B => {self.ld_r8_r8(REG_A, REG_E)},
+            0x007C => {self.ld_r8_r8(REG_A, REG_H)},
+            0x007D => {self.ld_r8_r8(REG_A, REG_L)},
+            0x007E => {self.ld_r8_r16a(REG_A, REG_H, REG_L)},
+            0x007F => {self.ld_r8_r8(REG_A, REG_A)},
             0x0080 => {},
             0x0081 => {},
             0x0082 => {},
