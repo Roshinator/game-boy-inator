@@ -1,7 +1,7 @@
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::rect::Rect;
+use sdl2::rect::{Point};
 use std::time::Duration;
 use std::thread;
 
@@ -47,7 +47,8 @@ fn main()
             {
                 let color = ((i % 2 == j % 2) as u8) * 255;
                 canvas.set_draw_color(Color::RGB(color, color, color));
-                canvas.fill_rect(Rect::new(i,j,1,1)).unwrap();
+                canvas.draw_point(Point::new(i, j)).unwrap();
+                //canvas.fill_rect(Rect::new(i,j,1,1)).unwrap();
             }
         }
         canvas.present();
