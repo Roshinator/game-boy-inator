@@ -7,4 +7,7 @@ edition = "2021"
 
 [dependencies.sdl2]
 version = "0.35"
-features = ["bundled", "static-link"] 
+features = ["bundled", "static-link"]
+
+[patch.crates-io]
+cmake = {git = 'https://github.com/alexcrichton/cmake-rs', rev = 'dca4a9df71df40eeb57b974703d745607b168d9f'}
