@@ -55,4 +55,6 @@ fn main()
         thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 
+    let mut x = game_boy_hardware::cpu::Cpu::new();
+    x.execute(); //Just in place for now to suppress warnings
 }
