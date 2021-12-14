@@ -1,3 +1,5 @@
+use std::ops::RemAssign;
+
 use super::ram::Ram;
 
 use usize as Reg;
@@ -460,6 +462,87 @@ impl Cpu
         self.aux_write_flag(FLAG_H, false);
     }
 
+    fn sla_r8(&mut self, p1: Reg)
+    {
+        self.aux_write_flag(FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
+        self.regs[p1] = self.regs[p1] << 1u8;
+        
+        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn sla_r8a(&mut self, msh: Reg, lsh: Reg)
+    {
+        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
+        let result = p1 << 1u8;
+        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        
+        self.aux_write_flag(FLAG_Z, result == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn sra_r8(&mut self, p1: Reg)
+    {
+        self.aux_write_flag(FLAG_C, self.regs[p1] & 1 != 0);
+        self.regs[p1] = (self.regs[p1] >> 1u8) | (self.regs[p1] & 0b10000000u8); //fill with leftmost
+        
+        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn sra_r8a(&mut self, msh: Reg, lsh: Reg)
+    {
+        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.aux_write_flag(FLAG_C, p1 & 1 != 0);
+        let result =( p1 >> 1u8) | (p1 | 0b10000000u8);
+        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        
+        self.aux_write_flag(FLAG_Z, result == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn srl_r8(&mut self, p1: Reg)
+    {
+        self.aux_write_flag(FLAG_C, self.regs[p1] & 1 != 0);
+        self.regs[p1] = self.regs[p1] >> 1u8; //fill with leftmost
+        
+        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn srl_r8a(&mut self, msh: Reg, lsh: Reg)
+    {
+        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.aux_write_flag(FLAG_C, p1 & 1 != 0);
+        let result = p1 >> 1u8;
+        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        
+        self.aux_write_flag(FLAG_Z, result == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn swap_r8(&mut self, p1: Reg)
+    {
+        let lower_to_upper_half = self.regs[p1] << 4u8;
+        let upper_to_lower_half = self.regs[p1] >> 4u8;
+        self.regs[p1] = lower_to_upper_half | upper_to_lower_half;
+    }
+
+    fn swap_r8a(&mut self, msh: Reg, lsh: Reg)
+    {
+        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let lower_to_upper_half = p1 << 4u8;
+        let upper_to_lower_half = p1 >> 4u8;
+        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], lower_to_upper_half | upper_to_lower_half);
+    }
+
 
     pub fn execute(&mut self)
     {
@@ -758,38 +841,38 @@ impl Cpu
             0x1D => {self.rr_r8(REG_L)},
             0x1E => {self.rr_r8a(REG_H, REG_L)},
             0x1F => {self.rr_r8(REG_A)},
-            0x20 => {},
-            0x21 => {},
-            0x22 => {},
-            0x23 => {},
-            0x24 => {},
-            0x25 => {},
-            0x26 => {},
-            0x27 => {},
-            0x28 => {},
-            0x29 => {},
-            0x2A => {},
-            0x2B => {},
-            0x2C => {},
-            0x2D => {},
-            0x2E => {},
-            0x2F => {},
-            0x30 => {},
-            0x31 => {},
-            0x32 => {},
-            0x33 => {},
-            0x34 => {},
-            0x35 => {},
-            0x36 => {},
-            0x37 => {},
-            0x38 => {},
-            0x39 => {},
-            0x3A => {},
-            0x3B => {},
-            0x3C => {},
-            0x3D => {},
-            0x3E => {},
-            0x3F => {},
+            0x20 => {self.sla_r8(REG_B)},
+            0x21 => {self.sla_r8(REG_C)},
+            0x22 => {self.sla_r8(REG_D)},
+            0x23 => {self.sla_r8(REG_E)},
+            0x24 => {self.sla_r8(REG_H)},
+            0x25 => {self.sla_r8(REG_L)},
+            0x26 => {self.sla_r8a(REG_H, REG_L)},
+            0x27 => {self.sla_r8(REG_A)},
+            0x28 => {self.sra_r8(REG_B)},
+            0x29 => {self.sra_r8(REG_C)},
+            0x2A => {self.sra_r8(REG_D)},
+            0x2B => {self.sra_r8(REG_E)},
+            0x2C => {self.sra_r8(REG_H)},
+            0x2D => {self.sra_r8(REG_L)},
+            0x2E => {self.sra_r8a(REG_H, REG_L)},
+            0x2F => {self.sra_r8(REG_A)},
+            0x30 => {self.swap_r8(REG_B)},
+            0x31 => {self.swap_r8(REG_C)},
+            0x32 => {self.swap_r8(REG_D)},
+            0x33 => {self.swap_r8(REG_E)},
+            0x34 => {self.swap_r8(REG_H)},
+            0x35 => {self.swap_r8(REG_L)},
+            0x36 => {self.swap_r8a(REG_H, REG_L)},
+            0x37 => {self.swap_r8(REG_A)},
+            0x38 => {self.srl_r8(REG_B)},
+            0x39 => {self.srl_r8(REG_C)},
+            0x3A => {self.srl_r8(REG_D)},
+            0x3B => {self.srl_r8(REG_E)},
+            0x3C => {self.srl_r8(REG_H)},
+            0x3D => {self.srl_r8(REG_L)},
+            0x3E => {self.srl_r8a(REG_H, REG_L)},
+            0x3F => {self.srl_r8(REG_A)},
             0x40 => {},
             0x41 => {},
             0x42 => {},
