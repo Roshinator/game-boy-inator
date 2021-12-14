@@ -76,13 +76,13 @@ impl Cpu
 
     fn ld_r8_r16a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let x = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let x = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         self.regs[p1] = x;
     }
 
     fn ld_r16a_r8(&mut self, msh: Reg, lsh: Reg, p2: Reg)
     {
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], self.regs[p2]);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], self.regs[p2]);
     }
 
     // TODO: See if the flags are modified
@@ -112,9 +112,9 @@ impl Cpu
 
     fn inc_r8a(&mut self, msh: Reg, lsh: Reg)
     {
-        let result = self.ram.read_from_address_reg_pair(
+        let result = self.ram.read_from_address_rp(
             self.regs[msh], self.regs[lsh]).overflowing_add(1);
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result.0);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result.0);
         
         self.aux_write_flag(FLAG_Z, result.0 == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -133,9 +133,9 @@ impl Cpu
 
     fn dec_r8a(&mut self, msh: Reg, lsh: Reg)
     {
-        let result = self.ram.read_from_address_reg_pair(
+        let result = self.ram.read_from_address_rp(
             self.regs[msh], self.regs[lsh]).overflowing_sub(1);
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result.0);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result.0);
         
         self.aux_write_flag(FLAG_Z, result.0 == 0);
         self.aux_write_flag(FLAG_N, true);
@@ -171,7 +171,7 @@ impl Cpu
 
     fn add_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p2 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(p2);
         self.regs[p1] = result.0;
@@ -203,7 +203,7 @@ impl Cpu
     fn adc_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
         let carry = self.aux_read_flag(FLAG_C) as u8;
-        let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p2 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_add(p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -234,7 +234,7 @@ impl Cpu
 
     fn sub_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p2 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(p2);
         self.regs[p1] = result.0;
@@ -266,7 +266,7 @@ impl Cpu
     fn sbc_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
         let carry = self.aux_read_flag(FLAG_C) as u8;
-        let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p2 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_sub(p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -293,7 +293,7 @@ impl Cpu
 
     fn and_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
-        self.regs[p1] = self.regs[p1] & self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.regs[p1] = self.regs[p1] & self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
 
         self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
         self.aux_write_flag(FLAG_H, true);
@@ -313,7 +313,7 @@ impl Cpu
 
     fn xor_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
-        self.regs[p1] = self.regs[p1] ^ self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.regs[p1] = self.regs[p1] ^ self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
 
         self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
         self.aux_write_flag(FLAG_H, false);
@@ -333,7 +333,7 @@ impl Cpu
 
     fn or_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
-        self.regs[p1] = self.regs[p1] | self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.regs[p1] = self.regs[p1] | self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
 
         self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
         self.aux_write_flag(FLAG_H, false);
@@ -356,7 +356,7 @@ impl Cpu
 
     fn cp_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p2 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(p2);
         self.regs[p1] = result.0;
@@ -382,10 +382,10 @@ impl Cpu
 
     fn rlc_r8a(&mut self, msh: Reg, lsh: Reg)
     {
-        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p1 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
         let result = p1.rotate_left(1);
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
         
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -404,10 +404,10 @@ impl Cpu
 
     fn rrc_r8a(&mut self, msh: Reg, lsh: Reg)
     {
-        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p1 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, p1 & 1 != 0);
         let result = p1.rotate_right(1);
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
         
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -428,10 +428,10 @@ impl Cpu
     fn rl_r8a(&mut self, msh: Reg, lsh: Reg)
     {
         let cin = self.aux_read_flag(FLAG_C) as u8;
-        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p1 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
         let result = (p1 << 1u8) | cin;
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
         
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -452,10 +452,10 @@ impl Cpu
     fn rr_r8a(&mut self, msh: Reg, lsh: Reg)
     {
         let cin = self.aux_read_flag(FLAG_C) as u8;
-        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p1 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, p1 & 1 != 0);
         let result = (p1 >> 1u8) | (cin << 7u8);
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
         
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -474,10 +474,10 @@ impl Cpu
 
     fn sla_r8a(&mut self, msh: Reg, lsh: Reg)
     {
-        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p1 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
         let result = p1 << 1u8;
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
         
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -496,10 +496,10 @@ impl Cpu
 
     fn sra_r8a(&mut self, msh: Reg, lsh: Reg)
     {
-        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p1 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, p1 & 1 != 0);
         let result =( p1 >> 1u8) | (p1 | 0b10000000u8);
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
         
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -518,10 +518,10 @@ impl Cpu
 
     fn srl_r8a(&mut self, msh: Reg, lsh: Reg)
     {
-        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p1 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, p1 & 1 != 0);
         let result = p1 >> 1u8;
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
         
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -537,10 +537,47 @@ impl Cpu
 
     fn swap_r8a(&mut self, msh: Reg, lsh: Reg)
     {
-        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let p1 = self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
         let lower_to_upper_half = p1 << 4u8;
         let upper_to_lower_half = p1 >> 4u8;
-        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], lower_to_upper_half | upper_to_lower_half);
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh], lower_to_upper_half | upper_to_lower_half);
+    }
+
+    fn bit_r8(&mut self, p1: u8, p2: Reg)
+    {
+        self.aux_write_flag(FLAG_H, true);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_Z, (self.regs[p2] & (1u8 << p1)) == 0);
+    }
+
+    fn bit_r8a(&mut self, p1: u8, msh: Reg, lsh: Reg)
+    {
+        self.aux_write_flag(FLAG_H, true);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_Z, 
+            (self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]) & (1u8 << p1)) == 0);
+    }
+
+    fn res_r8(&mut self, p1: u8, p2: Reg)
+    {
+        self.regs[p2] = self.regs[p2] & (!(1u8 << p1));
+    }
+
+    fn res_r8a(&mut self, p1: u8, msh: Reg, lsh: Reg)
+    {
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh],
+            self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]) & (!(1u8 << p1)));
+    }
+
+    fn set_r8(&mut self, p1: u8, p2: Reg)
+    {
+        self.regs[p2] = self.regs[p2] | (1u8 << p1);
+    }
+
+    fn set_r8a(&mut self, p1: u8, msh: Reg, lsh: Reg)
+    {
+        self.ram.write_to_address_rp(self.regs[msh], self.regs[lsh],
+            self.ram.read_from_address_rp(self.regs[msh], self.regs[lsh]) | (1u8 << p1));
     }
 
 
@@ -873,198 +910,198 @@ impl Cpu
             0x3D => {self.srl_r8(REG_L)},
             0x3E => {self.srl_r8a(REG_H, REG_L)},
             0x3F => {self.srl_r8(REG_A)},
-            0x40 => {},
-            0x41 => {},
-            0x42 => {},
-            0x43 => {},
-            0x44 => {},
-            0x45 => {},
-            0x46 => {},
-            0x47 => {},
-            0x48 => {},
-            0x49 => {},
-            0x4A => {},
-            0x4B => {},
-            0x4C => {},
-            0x4D => {},
-            0x4E => {},
-            0x4F => {},
-            0x50 => {},
-            0x51 => {},
-            0x52 => {},
-            0x53 => {},
-            0x54 => {},
-            0x55 => {},
-            0x56 => {},
-            0x57 => {},
-            0x58 => {},
-            0x59 => {},
-            0x5A => {},
-            0x5B => {},
-            0x5C => {},
-            0x5D => {},
-            0x5E => {},
-            0x5F => {},
-            0x60 => {},
-            0x61 => {},
-            0x62 => {},
-            0x63 => {},
-            0x64 => {},
-            0x65 => {},
-            0x66 => {},
-            0x67 => {},
-            0x68 => {},
-            0x69 => {},
-            0x6A => {},
-            0x6B => {},
-            0x6C => {},
-            0x6D => {},
-            0x6E => {},
-            0x6F => {},
-            0x70 => {},
-            0x71 => {},
-            0x72 => {},
-            0x73 => {},
-            0x74 => {},
-            0x75 => {},
-            0x76 => {},
-            0x77 => {},
-            0x78 => {},
-            0x79 => {},
-            0x7A => {},
-            0x7B => {},
-            0x7C => {},
-            0x7D => {},
-            0x7E => {},
-            0x7F => {},
-            0x80 => {},
-            0x81 => {},
-            0x82 => {},
-            0x83 => {},
-            0x84 => {},
-            0x85 => {},
-            0x86 => {},
-            0x87 => {},
-            0x88 => {},
-            0x89 => {},
-            0x8A => {},
-            0x8B => {},
-            0x8C => {},
-            0x8D => {},
-            0x8E => {},
-            0x8F => {},
-            0x90 => {},
-            0x91 => {},
-            0x92 => {},
-            0x93 => {},
-            0x94 => {},
-            0x95 => {},
-            0x96 => {},
-            0x97 => {},
-            0x98 => {},
-            0x99 => {},
-            0x9A => {},
-            0x9B => {},
-            0x9C => {},
-            0x9D => {},
-            0x9E => {},
-            0x9F => {},
-            0xA0 => {},
-            0xA1 => {},
-            0xA2 => {},
-            0xA3 => {},
-            0xA4 => {},
-            0xA5 => {},
-            0xA6 => {},
-            0xA7 => {},
-            0xA8 => {},
-            0xA9 => {},
-            0xAA => {},
-            0xAB => {},
-            0xAC => {},
-            0xAD => {},
-            0xAE => {},
-            0xAF => {},
-            0xB0 => {},
-            0xB1 => {},
-            0xB2 => {},
-            0xB3 => {},
-            0xB4 => {},
-            0xB5 => {},
-            0xB6 => {},
-            0xB7 => {},
-            0xB8 => {},
-            0xB9 => {},
-            0xBA => {},
-            0xBB => {},
-            0xBC => {},
-            0xBD => {},
-            0xBE => {},
-            0xBF => {},
-            0xC0 => {},
-            0xC1 => {},
-            0xC2 => {},
-            0xC3 => {},
-            0xC4 => {},
-            0xC5 => {},
-            0xC6 => {},
-            0xC7 => {},
-            0xC8 => {},
-            0xC9 => {},
-            0xCA => {},
-            0xCB => {},
-            0xCC => {},
-            0xCD => {},
-            0xCE => {},
-            0xCF => {},
-            0xD0 => {},
-            0xD1 => {},
-            0xD2 => {},
-            0xD3 => {},
-            0xD4 => {},
-            0xD5 => {},
-            0xD6 => {},
-            0xD7 => {},
-            0xD8 => {},
-            0xD9 => {},
-            0xDA => {},
-            0xDB => {},
-            0xDC => {},
-            0xDD => {},
-            0xDE => {},
-            0xDF => {},
-            0xE0 => {},
-            0xE1 => {},
-            0xE2 => {},
-            0xE3 => {},
-            0xE4 => {},
-            0xE5 => {},
-            0xE6 => {},
-            0xE7 => {},
-            0xE8 => {},
-            0xE9 => {},
-            0xEA => {},
-            0xEB => {},
-            0xEC => {},
-            0xED => {},
-            0xEE => {},
-            0xEF => {},
-            0xF0 => {},
-            0xF1 => {},
-            0xF2 => {},
-            0xF3 => {},
-            0xF4 => {},
-            0xF5 => {},
-            0xF6 => {},
-            0xF7 => {},
-            0xF8 => {},
-            0xF9 => {},
-            0xFA => {},
-            0xFB => {},
-            0xFC => {},
-            0xFD => {},
-            0xFE => {},
-            0xFF => {},
+            0x40 => {self.bit_r8(0, REG_B)},
+            0x41 => {self.bit_r8(0, REG_C)},
+            0x42 => {self.bit_r8(0, REG_D)},
+            0x43 => {self.bit_r8(0, REG_E)},
+            0x44 => {self.bit_r8(0, REG_H)},
+            0x45 => {self.bit_r8(0, REG_L)},
+            0x46 => {self.bit_r8a(0, REG_H, REG_L)},
+            0x47 => {self.bit_r8(0, REG_A)},
+            0x48 => {self.bit_r8(1, REG_B)},
+            0x49 => {self.bit_r8(1, REG_C)},
+            0x4A => {self.bit_r8(1, REG_D)},
+            0x4B => {self.bit_r8(1, REG_E)},
+            0x4C => {self.bit_r8(1, REG_H)},
+            0x4D => {self.bit_r8(1, REG_L)},
+            0x4E => {self.bit_r8a(1, REG_H, REG_L)},
+            0x4F => {self.bit_r8(1, REG_A)},
+            0x50 => {self.bit_r8(2, REG_B)},
+            0x51 => {self.bit_r8(2, REG_C)},
+            0x52 => {self.bit_r8(2, REG_D)},
+            0x53 => {self.bit_r8(2, REG_E)},
+            0x54 => {self.bit_r8(2, REG_H)},
+            0x55 => {self.bit_r8(2, REG_L)},
+            0x56 => {self.bit_r8a(2, REG_H, REG_L)},
+            0x57 => {self.bit_r8(2, REG_A)},
+            0x58 => {self.bit_r8(3, REG_B)},
+            0x59 => {self.bit_r8(3, REG_C)},
+            0x5A => {self.bit_r8(3, REG_D)},
+            0x5B => {self.bit_r8(3, REG_E)},
+            0x5C => {self.bit_r8(3, REG_H)},
+            0x5D => {self.bit_r8(3, REG_L)},
+            0x5E => {self.bit_r8a(3, REG_H, REG_L)},
+            0x5F => {self.bit_r8(3, REG_A)},
+            0x60 => {self.bit_r8(4, REG_B)},
+            0x61 => {self.bit_r8(4, REG_C)},
+            0x62 => {self.bit_r8(4, REG_D)},
+            0x63 => {self.bit_r8(4, REG_E)},
+            0x64 => {self.bit_r8(4, REG_H)},
+            0x65 => {self.bit_r8(4, REG_L)},
+            0x66 => {self.bit_r8a(4, REG_H, REG_L)},
+            0x67 => {self.bit_r8(4, REG_A)},
+            0x68 => {self.bit_r8(5, REG_B)},
+            0x69 => {self.bit_r8(5, REG_C)},
+            0x6A => {self.bit_r8(5, REG_D)},
+            0x6B => {self.bit_r8(5, REG_E)},
+            0x6C => {self.bit_r8(5, REG_H)},
+            0x6D => {self.bit_r8(5, REG_L)},
+            0x6E => {self.bit_r8a(5, REG_H, REG_L)},
+            0x6F => {self.bit_r8(5, REG_A)},
+            0x70 => {self.bit_r8(6, REG_B)},
+            0x71 => {self.bit_r8(6, REG_C)},
+            0x72 => {self.bit_r8(6, REG_D)},
+            0x73 => {self.bit_r8(6, REG_E)},
+            0x74 => {self.bit_r8(6, REG_H)},
+            0x75 => {self.bit_r8(6, REG_L)},
+            0x76 => {self.bit_r8a(6, REG_H, REG_L)},
+            0x77 => {self.bit_r8(6, REG_A)},
+            0x78 => {self.bit_r8(7, REG_B)},
+            0x79 => {self.bit_r8(7, REG_C)},
+            0x7A => {self.bit_r8(7, REG_D)},
+            0x7B => {self.bit_r8(7, REG_E)},
+            0x7C => {self.bit_r8(7, REG_H)},
+            0x7D => {self.bit_r8(7, REG_L)},
+            0x7E => {self.bit_r8a(7, REG_H, REG_L)},
+            0x7F => {self.bit_r8(7, REG_A)},
+            0x80 => {self.res_r8(0, REG_B)},
+            0x81 => {self.res_r8(0, REG_C)},
+            0x82 => {self.res_r8(0, REG_D)},
+            0x83 => {self.res_r8(0, REG_E)},
+            0x84 => {self.res_r8(0, REG_H)},
+            0x85 => {self.res_r8(0, REG_L)},
+            0x86 => {self.res_r8a(0, REG_H, REG_L)},
+            0x87 => {self.res_r8(0, REG_A)},
+            0x88 => {self.res_r8(1, REG_B)},
+            0x89 => {self.res_r8(1, REG_C)},
+            0x8A => {self.res_r8(1, REG_D)},
+            0x8B => {self.res_r8(1, REG_E)},
+            0x8C => {self.res_r8(1, REG_H)},
+            0x8D => {self.res_r8(1, REG_L)},
+            0x8E => {self.res_r8a(1, REG_H, REG_L)},
+            0x8F => {self.res_r8(1, REG_A)},
+            0x90 => {self.res_r8(2, REG_B)},
+            0x91 => {self.res_r8(2, REG_C)},
+            0x92 => {self.res_r8(2, REG_D)},
+            0x93 => {self.res_r8(2, REG_E)},
+            0x94 => {self.res_r8(2, REG_H)},
+            0x95 => {self.res_r8(2, REG_L)},
+            0x96 => {self.res_r8a(2, REG_H, REG_L)},
+            0x97 => {self.res_r8(2, REG_A)},
+            0x98 => {self.res_r8(3, REG_B)},
+            0x99 => {self.res_r8(3, REG_C)},
+            0x9A => {self.res_r8(3, REG_D)},
+            0x9B => {self.res_r8(3, REG_E)},
+            0x9C => {self.res_r8(3, REG_H)},
+            0x9D => {self.res_r8(3, REG_L)},
+            0x9E => {self.res_r8a(3, REG_H, REG_L)},
+            0x9F => {self.res_r8(3, REG_A)},
+            0xA0 => {self.res_r8(4, REG_B)},
+            0xA1 => {self.res_r8(4, REG_C)},
+            0xA2 => {self.res_r8(4, REG_D)},
+            0xA3 => {self.res_r8(4, REG_E)},
+            0xA4 => {self.res_r8(4, REG_H)},
+            0xA5 => {self.res_r8(4, REG_L)},
+            0xA6 => {self.res_r8a(4, REG_H, REG_L)},
+            0xA7 => {self.res_r8(4, REG_A)},
+            0xA8 => {self.res_r8(5, REG_B)},
+            0xA9 => {self.res_r8(5, REG_C)},
+            0xAA => {self.res_r8(5, REG_D)},
+            0xAB => {self.res_r8(5, REG_E)},
+            0xAC => {self.res_r8(5, REG_H)},
+            0xAD => {self.res_r8(5, REG_L)},
+            0xAE => {self.res_r8a(5, REG_H, REG_L)},
+            0xAF => {self.res_r8(5, REG_A)},
+            0xB0 => {self.res_r8(6, REG_B)},
+            0xB1 => {self.res_r8(6, REG_C)},
+            0xB2 => {self.res_r8(6, REG_D)},
+            0xB3 => {self.res_r8(6, REG_E)},
+            0xB4 => {self.res_r8(6, REG_H)},
+            0xB5 => {self.res_r8(6, REG_L)},
+            0xB6 => {self.res_r8a(6, REG_H, REG_L)},
+            0xB7 => {self.res_r8(6, REG_A)},
+            0xB8 => {self.res_r8(7, REG_B)},
+            0xB9 => {self.res_r8(7, REG_C)},
+            0xBA => {self.res_r8(7, REG_D)},
+            0xBB => {self.res_r8(7, REG_E)},
+            0xBC => {self.res_r8(7, REG_H)},
+            0xBD => {self.res_r8(7, REG_L)},
+            0xBE => {self.res_r8a(7, REG_H, REG_L)},
+            0xBF => {self.res_r8(7, REG_A)},
+            0xC0 => {self.set_r8(0, REG_B)},
+            0xC1 => {self.set_r8(0, REG_C)},
+            0xC2 => {self.set_r8(0, REG_D)},
+            0xC3 => {self.set_r8(0, REG_E)},
+            0xC4 => {self.set_r8(0, REG_H)},
+            0xC5 => {self.set_r8(0, REG_L)},
+            0xC6 => {self.set_r8a(0, REG_H, REG_L)},
+            0xC7 => {self.set_r8(0, REG_A)},
+            0xC8 => {self.set_r8(1, REG_B)},
+            0xC9 => {self.set_r8(1, REG_C)},
+            0xCA => {self.set_r8(1, REG_D)},
+            0xCB => {self.set_r8(1, REG_E)},
+            0xCC => {self.set_r8(1, REG_H)},
+            0xCD => {self.set_r8(1, REG_L)},
+            0xCE => {self.set_r8a(1, REG_H, REG_L)},
+            0xCF => {self.set_r8(1, REG_A)},
+            0xD0 => {self.set_r8(2, REG_B)},
+            0xD1 => {self.set_r8(2, REG_C)},
+            0xD2 => {self.set_r8(2, REG_D)},
+            0xD3 => {self.set_r8(2, REG_E)},
+            0xD4 => {self.set_r8(2, REG_H)},
+            0xD5 => {self.set_r8(2, REG_L)},
+            0xD6 => {self.set_r8a(2, REG_H, REG_L)},
+            0xD7 => {self.set_r8(2, REG_A)},
+            0xD8 => {self.set_r8(3, REG_B)},
+            0xD9 => {self.set_r8(3, REG_C)},
+            0xDA => {self.set_r8(3, REG_D)},
+            0xDB => {self.set_r8(3, REG_E)},
+            0xDC => {self.set_r8(3, REG_H)},
+            0xDD => {self.set_r8(3, REG_L)},
+            0xDE => {self.set_r8a(3, REG_H, REG_L)},
+            0xDF => {self.set_r8(3, REG_A)},
+            0xE0 => {self.set_r8(4, REG_B)},
+            0xE1 => {self.set_r8(4, REG_C)},
+            0xE2 => {self.set_r8(4, REG_D)},
+            0xE3 => {self.set_r8(4, REG_E)},
+            0xE4 => {self.set_r8(4, REG_H)},
+            0xE5 => {self.set_r8(4, REG_L)},
+            0xE6 => {self.set_r8a(4, REG_H, REG_L)},
+            0xE7 => {self.set_r8(4, REG_A)},
+            0xE8 => {self.set_r8(5, REG_B)},
+            0xE9 => {self.set_r8(5, REG_C)},
+            0xEA => {self.set_r8(5, REG_D)},
+            0xEB => {self.set_r8(5, REG_E)},
+            0xEC => {self.set_r8(5, REG_H)},
+            0xED => {self.set_r8(5, REG_L)},
+            0xEE => {self.set_r8a(5, REG_H, REG_L)},
+            0xEF => {self.set_r8(5, REG_A)},
+            0xF0 => {self.set_r8(6, REG_B)},
+            0xF1 => {self.set_r8(6, REG_C)},
+            0xF2 => {self.set_r8(6, REG_D)},
+            0xF3 => {self.set_r8(6, REG_E)},
+            0xF4 => {self.set_r8(6, REG_H)},
+            0xF5 => {self.set_r8(6, REG_L)},
+            0xF6 => {self.set_r8a(6, REG_H, REG_L)},
+            0xF7 => {self.set_r8(6, REG_A)},
+            0xF8 => {self.set_r8(7, REG_B)},
+            0xF9 => {self.set_r8(7, REG_C)},
+            0xFA => {self.set_r8(7, REG_D)},
+            0xFB => {self.set_r8(7, REG_E)},
+            0xFC => {self.set_r8(7, REG_H)},
+            0xFD => {self.set_r8(7, REG_L)},
+            0xFE => {self.set_r8a(7, REG_H, REG_L)},
+            0xFF => {self.set_r8(7, REG_A)},
             _ => panic!("Tried to execute invalid instruction")
         }
     }

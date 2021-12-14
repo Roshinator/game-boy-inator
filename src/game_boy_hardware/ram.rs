@@ -15,7 +15,7 @@ impl Ram
         self.mem[address] = data;
     }
 
-    pub fn write_to_address_reg_pair(&mut self, msh: u8, lsh: u8, data: u8)
+    pub fn write_to_address_rp(&mut self, msh: u8, lsh: u8, data: u8)
     {
         self.mem[u16::from_le_bytes([msh, lsh]) as usize] = data;
     }
@@ -25,7 +25,7 @@ impl Ram
         self.mem[address]
     }
 
-    pub fn read_from_address_reg_pair(&self, msh: u8, lsh: u8) -> u8
+    pub fn read_from_address_rp(&self, msh: u8, lsh: u8) -> u8
     {
         self.mem[u16::from_le_bytes([msh, lsh]) as usize]
     }
