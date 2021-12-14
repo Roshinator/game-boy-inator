@@ -7,7 +7,7 @@ impl Ram
 {
     pub fn new() -> Ram
     {
-        return Ram { mem: [0; 0xFFFF] }
+        Ram { mem: [0; 0xFFFF] }
     }
 
     pub fn write_to_address(&mut self, address: usize, data: u8)
