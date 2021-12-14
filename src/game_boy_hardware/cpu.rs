@@ -226,7 +226,7 @@ impl Cpu
         
         self.aux_write_flag(FLAG_Z, result.0 == 0);
         self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_N, true);
         self.aux_write_flag(FLAG_C, result.1);
     }
 
@@ -240,7 +240,7 @@ impl Cpu
         
         self.aux_write_flag(FLAG_Z, result.0 == 0);
         self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_N, true);
         self.aux_write_flag(FLAG_C, result.1);
     }
 
@@ -257,7 +257,7 @@ impl Cpu
         
         self.aux_write_flag(FLAG_Z, result2.0 == 0);
         self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_N, true);
         self.aux_write_flag(FLAG_C, result1.1 || result2.1);
     }
 
@@ -275,7 +275,7 @@ impl Cpu
         
         self.aux_write_flag(FLAG_Z, result2.0 == 0);
         self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_N, true);
         self.aux_write_flag(FLAG_C, result1.1 || result2.1);
     }
 
@@ -337,6 +337,127 @@ impl Cpu
         self.aux_write_flag(FLAG_H, false);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, false);
+    }
+
+    fn cp_r8_r8(&mut self, p1: Reg, p2: Reg)
+    {
+        let half_carry_pre = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
+        let result = self.regs[p1].overflowing_sub(self.regs[p2]);
+        self.regs[p1] = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
+        
+        self.aux_write_flag(FLAG_Z, result.0 == 0);
+        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(FLAG_N, true);
+        self.aux_write_flag(FLAG_C, result.1);
+    }
+
+    fn cp_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
+    {
+        let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
+        let result = self.regs[p1].overflowing_add(p2);
+        self.regs[p1] = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
+        
+        self.aux_write_flag(FLAG_Z, result.0 == 0);
+        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(FLAG_N, true);
+        self.aux_write_flag(FLAG_C, result.1);
+    }
+
+    //--------------------16 BIT OPCODES--------------------
+
+    fn rlc_r8(&mut self, p1: Reg)
+    {
+        self.aux_write_flag(FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
+        self.regs[p1] = self.regs[p1].rotate_left(1);
+        
+        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn rlc_r8a(&mut self, msh: Reg, lsh: Reg)
+    {
+        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
+        let result = p1.rotate_left(1);
+        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        
+        self.aux_write_flag(FLAG_Z, result == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn rrc_r8(&mut self, p1: Reg)
+    {
+        self.aux_write_flag(FLAG_C, self.regs[p1] & 1 != 0);
+        self.regs[p1] = self.regs[p1].rotate_right(1);
+        
+        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn rrc_r8a(&mut self, msh: Reg, lsh: Reg)
+    {
+        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.aux_write_flag(FLAG_C, p1 & 1 != 0);
+        let result = p1.rotate_right(1);
+        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        
+        self.aux_write_flag(FLAG_Z, result == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn rl_r8(&mut self, p1: Reg)
+    {
+        let cin = self.aux_read_flag(FLAG_C) as u8;
+        self.aux_write_flag(FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
+        self.regs[p1] = (self.regs[p1] << 1u8) | cin;
+        
+        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn rl_r8a(&mut self, msh: Reg, lsh: Reg)
+    {
+        let cin = self.aux_read_flag(FLAG_C) as u8;
+        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
+        let result = (p1 << 1u8) | cin;
+        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        
+        self.aux_write_flag(FLAG_Z, result == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn rr_r8(&mut self, p1: Reg)
+    {
+        let cin = self.aux_read_flag(FLAG_C) as u8;
+        self.aux_write_flag(FLAG_C, self.regs[p1] & 1 != 0);
+        self.regs[p1] = (self.regs[p1] >> 1u8) | (cin << 7u8);
+        
+        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
+    }
+
+    fn rr_r8a(&mut self, msh: Reg, lsh: Reg)
+    {
+        let cin = self.aux_read_flag(FLAG_C) as u8;
+        let p1 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        self.aux_write_flag(FLAG_C, p1 & 1 != 0);
+        let result = (p1 >> 1u8) | (cin << 7u8);
+        self.ram.write_to_address_reg_pair(self.regs[msh], self.regs[lsh], result);
+        
+        self.aux_write_flag(FLAG_Z, result == 0);
+        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(FLAG_H, false);
     }
 
 
@@ -528,14 +649,14 @@ impl Cpu
             0xB5 => {self.or_r8_r8(REG_A, REG_L)},
             0xB6 => {self.or_r8_r8a(REG_A, REG_H, REG_L)},
             0xB7 => {self.or_r8_r8(REG_A, REG_A)},
-            0xB8 => {},
-            0xB9 => {},
-            0xBA => {},
-            0xBB => {},
-            0xBC => {},
-            0xBD => {},
-            0xBE => {},
-            0xBF => {},
+            0xB8 => {self.cp_r8_r8(REG_A, REG_B)},
+            0xB9 => {self.cp_r8_r8(REG_A, REG_C)},
+            0xBA => {self.cp_r8_r8(REG_A, REG_D)},
+            0xBB => {self.cp_r8_r8(REG_A, REG_E)},
+            0xBC => {self.cp_r8_r8(REG_A, REG_H)},
+            0xBD => {self.cp_r8_r8(REG_A, REG_L)},
+            0xBE => {self.cp_r8_r8a(REG_A, REG_H, REG_L)},
+            0xBF => {self.cp_r8_r8(REG_A, REG_A)},
             0xC0 => {},
             0xC1 => {},
             0xC2 => {},
@@ -605,38 +726,38 @@ impl Cpu
 
         match self.pcsp_regs[REG_PC] //CB Prefix
         {
-            0x00 => {},
-            0x01 => {},
-            0x02 => {},
-            0x03 => {},
-            0x04 => {},
-            0x05 => {},
-            0x06 => {},
-            0x07 => {},
-            0x08 => {},
-            0x09 => {},
-            0x0A => {},
-            0x0B => {},
-            0x0C => {},
-            0x0D => {},
-            0x0E => {},
-            0x0F => {},
-            0x10 => {},
-            0x11 => {},
-            0x12 => {},
-            0x13 => {},
-            0x14 => {},
-            0x15 => {},
-            0x16 => {},
-            0x17 => {},
-            0x18 => {},
-            0x19 => {},
-            0x1A => {},
-            0x1B => {},
-            0x1C => {},
-            0x1D => {},
-            0x1E => {},
-            0x1F => {},
+            0x00 => {self.rlc_r8(REG_B)},
+            0x01 => {self.rlc_r8(REG_C)},
+            0x02 => {self.rlc_r8(REG_D)},
+            0x03 => {self.rlc_r8(REG_E)},
+            0x04 => {self.rlc_r8(REG_H)},
+            0x05 => {self.rlc_r8(REG_L)},
+            0x06 => {self.rlc_r8a(REG_H, REG_L)},
+            0x07 => {self.rlc_r8(REG_A)},
+            0x08 => {self.rrc_r8(REG_B)},
+            0x09 => {self.rrc_r8(REG_C)},
+            0x0A => {self.rrc_r8(REG_D)},
+            0x0B => {self.rrc_r8(REG_E)},
+            0x0C => {self.rrc_r8(REG_H)},
+            0x0D => {self.rrc_r8(REG_L)},
+            0x0E => {self.rrc_r8a(REG_H, REG_L)},
+            0x0F => {self.rrc_r8(REG_A)},
+            0x10 => {self.rl_r8(REG_B)},
+            0x11 => {self.rl_r8(REG_C)},
+            0x12 => {self.rl_r8(REG_D)},
+            0x13 => {self.rl_r8(REG_E)},
+            0x14 => {self.rl_r8(REG_H)},
+            0x15 => {self.rl_r8(REG_L)},
+            0x16 => {self.rl_r8a(REG_H, REG_L)},
+            0x17 => {self.rl_r8(REG_A)},
+            0x18 => {self.rr_r8(REG_B)},
+            0x19 => {self.rr_r8(REG_C)},
+            0x1A => {self.rr_r8(REG_D)},
+            0x1B => {self.rr_r8(REG_E)},
+            0x1C => {self.rr_r8(REG_H)},
+            0x1D => {self.rr_r8(REG_L)},
+            0x1E => {self.rr_r8a(REG_H, REG_L)},
+            0x1F => {self.rr_r8(REG_A)},
             0x20 => {},
             0x21 => {},
             0x22 => {},
