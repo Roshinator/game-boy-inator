@@ -156,12 +156,13 @@ impl Cpu
 
     fn add_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
-        let half_carry = (self.regs[p1].to_le_bytes()[3] & self.regs[p2].to_le_bytes()[3]) != 0;
+        let half_carry_pre = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(self.regs[p2]);
         self.regs[p1] = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
         
         self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry);
+        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, result.1);
     }
@@ -169,28 +170,30 @@ impl Cpu
     fn add_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
         let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
-        let half_carry = (self.regs[p1].to_le_bytes()[3] & p2.to_le_bytes()[3]) != 0;
+        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(p2);
         self.regs[p1] = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
         
         self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry);
+        self.aux_write_flag(FLAG_H, half_carry_pre == half_carry_post);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, result.1);
     }
 
-    //TODO: Check ADC when overflow occurs before the carry is added
     fn adc_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
         let carry = self.aux_read_flag(FLAG_C) as u8;
+        let half_carry_pre1 = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_add(self.regs[p2]);
+        let half_carry_post1 = (result1.0 >> 4) & 1;
+        let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_add(carry);
-        let half_carry = (self.regs[p1].to_le_bytes()[3] & self.regs[p2].to_le_bytes()[3]) != 0
-            || (result1.0.to_le_bytes()[3] & carry.to_le_bytes()[3]) != 0;
         self.regs[p1] = result2.0;
+        let half_carry_post2 = (result2.0 >> 4) & 1;
         
         self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry);
+        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, result1.1 || result2.1);
     }
@@ -199,26 +202,29 @@ impl Cpu
     {
         let carry = self.aux_read_flag(FLAG_C) as u8;
         let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_add(p2);
+        let half_carry_post1 = (result1.0 >> 4) & 1;
+        let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_add(carry);
-        let half_carry = (self.regs[p1].to_le_bytes()[3] & p2.to_le_bytes()[3]) != 0
-            || (result1.0.to_le_bytes()[3] & carry.to_le_bytes()[3]) != 0;
         self.regs[p1] = result2.0;
+        let half_carry_post2 = (result2.0 >> 4) & 1;
         
         self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry);
+        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, result1.1 || result2.1);
     }
 
     fn sub_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
-        let half_carry = self.regs[p1].to_le_bytes()[3] == 0 && self.regs[p2].to_le_bytes()[3] != 0;
+        let half_carry_pre = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
         let result = self.regs[p1].overflowing_sub(self.regs[p2]);
         self.regs[p1] = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
         
         self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry);
+        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, result.1);
     }
@@ -226,12 +232,13 @@ impl Cpu
     fn sub_r8_r8a(&mut self, p1: Reg, msh: Reg, lsh: Reg)
     {
         let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
-        let half_carry = self.regs[p1].to_le_bytes()[3] == 0 && p2.to_le_bytes()[3] != 0;
+        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(p2);
         self.regs[p1] = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
         
         self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry);
+        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, result.1);
     }
@@ -239,14 +246,16 @@ impl Cpu
     fn sbc_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
         let carry = self.aux_read_flag(FLAG_C) as u8;
+        let half_carry_pre1 = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_sub(self.regs[p2]);
+        let half_carry_post1 = (result1.0 >> 4) & 1;
+        let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_sub(carry);
-        let half_carry = (self.regs[p1].to_le_bytes()[3] == 0 && self.regs[p2].to_le_bytes()[3] != 0)
-            || (result1.0.to_le_bytes()[3] == 0 && carry.to_le_bytes()[3] != 0);
         self.regs[p1] = result2.0;
+        let half_carry_post2 = (result2.0 >> 4) & 1;
         
         self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry);
+        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, result1.1 || result2.1);
     }
@@ -255,14 +264,16 @@ impl Cpu
     {
         let carry = self.aux_read_flag(FLAG_C) as u8;
         let p2 = self.ram.read_from_address_reg_pair(self.regs[msh], self.regs[lsh]);
+        let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_sub(p2);
+        let half_carry_post1 = (result1.0 >> 4) & 1;
+        let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_sub(carry);
-        let half_carry = (self.regs[p1].to_le_bytes()[3] == 0 && p2.to_le_bytes()[3] != 0)
-            || (result1.0.to_le_bytes()[3] == 0 && carry.to_le_bytes()[3] != 0);
         self.regs[p1] = result2.0;
+        let half_carry_post2 = (result2.0 >> 4) & 1;
         
         self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry);
+        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_C, result1.1 || result2.1);
     }
