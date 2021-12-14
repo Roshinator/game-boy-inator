@@ -216,6 +216,7 @@ impl Cpu
         self.aux_write_flag(FLAG_C, result1.1 || result2.1);
     }
 
+    //TODO: Check subtraction half carry calculations
     fn sub_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
         let half_carry_pre = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
