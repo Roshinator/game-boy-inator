@@ -558,6 +558,80 @@ impl Cpu
         self.aux_write_flag(FLAG_C, result.1);
     }
 
+    fn daa(&mut self)
+    {
+        let c_before = self.aux_read_flag(FLAG_C);
+        let bits_47 = (self.regs[REG_A] >> 4) & 0b00001111;
+        let h_before = self.aux_read_flag(FLAG_H);
+        let bits_03 = self.regs[REG_A] & 0b00001111;
+        if self.aux_read_flag(FLAG_N) == true //Add preceded instruction
+        {
+            match (c_before, bits_47, h_before, bits_03)
+            {
+                (false, 0x0..=0x9, false, 0x0..=0x9) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x00);
+                    self.aux_write_flag(FLAG_C, false);
+                },
+                (false, 0x0..=0x8, false, 0xA..=0xF) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x06);
+                    self.aux_write_flag(FLAG_C, false);
+                },
+                (false, 0x0..=0x9, true, 0x0..=0x3) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x06);
+                    self.aux_write_flag(FLAG_C, false);
+                },
+                (false, 0xA..=0xF, false, 0x0..=0x9) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x60);
+                    self.aux_write_flag(FLAG_C, true);
+                },
+                (false, 0x9..=0xF, false, 0xA..=0xF) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
+                    self.aux_write_flag(FLAG_C, true);
+                },
+                (false, 0xA..=0xF, true, 0x0..=0x3) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
+                    self.aux_write_flag(FLAG_C, true);
+                },
+                (true, 0x0..=0x2, false, 0x0..=0x9) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x60);
+                    self.aux_write_flag(FLAG_C, true);
+                },
+                (true, 0x0..=0x2, false, 0xA..=0xF) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
+                    self.aux_write_flag(FLAG_C, true);
+                },
+                (true, 0x0..=0x3, true, 0x0..=0x3) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
+                    self.aux_write_flag(FLAG_C, true);
+                },
+                _ => panic!("Invalid BDC conversion")
+            }
+        }
+        else //subtract preceded instruction
+        {
+            match (c_before, bits_47, h_before, bits_03)
+            {
+                (false, 0x0..=0x9, false, 0x0..=0x9) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x00);
+                    self.aux_write_flag(FLAG_C, false);
+                },
+                (false, 0x0..=0x8, true, 0x6..=0xF) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0xFA);
+                    self.aux_write_flag(FLAG_C, false);
+                },
+                (true, 0x7..=0xF, false, 0x0..=0x9) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0xA0);
+                    self.aux_write_flag(FLAG_C, true);
+                },
+                (true, 0x6..=0xF, true, 0x6..=0xF) => {
+                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x9A);
+                    self.aux_write_flag(FLAG_C, true);
+                },
+                _ => panic!("Invalid BDC conversion")
+            }
+        }
+    }
+
     fn jp_pc_16(&mut self, msh: u8, lsh: u8)
     {
         self.pc.reg = u16::from_le_bytes([lsh, msh]);
@@ -1046,7 +1120,7 @@ impl Cpu
                     let num = self.aux_read_immediate_data();
                     self.ld_r8_8(REG_H, num);
                 },
-                0x27 => {},
+                0x27 => {self.daa();},
                 0x28 => {
                     let immediate = i8::from_le_bytes(self.aux_read_immediate_data().to_le_bytes());
                     self.jr_flag_i8(FLAG_Z, immediate);
