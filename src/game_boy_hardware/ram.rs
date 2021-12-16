@@ -10,9 +10,9 @@ impl Ram
         Ram { mem: [0; 0xFFFF] }
     }
 
-    pub fn write_to_address(&mut self, address: usize, data: u8)
+    pub fn write_to_address(&mut self, address: u16, data: u8)
     {
-        self.mem[address] = data;
+        self.mem[address as usize] = data;
     }
 
     pub fn write_to_address_rp(&mut self, msh: u8, lsh: u8, data: u8)
@@ -20,9 +20,9 @@ impl Ram
         self.mem[u16::from_le_bytes([msh, lsh]) as usize] = data;
     }
 
-    pub fn read_from_address(&self, address: usize) -> u8
+    pub fn read_from_address(&self, address: u16) -> u8
     {
-        self.mem[address]
+        self.mem[address as usize]
     }
 
     pub fn read_from_address_rp(&self, msh: u8, lsh: u8) -> u8

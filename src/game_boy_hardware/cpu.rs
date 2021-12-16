@@ -10,8 +10,6 @@ const REG_F:Reg = 5;
 const REG_H:Reg = 6;
 const REG_L:Reg = 7;
 
-const REG_SP:Reg = 0;
-const REG_PC:Reg = 1;
 //in an AF situation, A is msh, F is lsh, little endian
 
 use u8 as Flag;
@@ -462,12 +460,6 @@ impl Cpu
         self.pc.should_increment = false;
     }
 
-    fn jp_pc_r16a(&mut self, msh: Reg, lsh: Reg)
-    {
-        self.pc.reg = u16::from_le_bytes([self.regs[lsh], self.regs[msh]]);
-        self.pc.should_increment = false;
-    }
-
     fn jp_flag_pc_16(&mut self, flag: Flag, msh: u8, lsh: u8)
     {
         if self.aux_read_flag(flag) == true
@@ -505,6 +497,73 @@ impl Cpu
             self.jr_i8(p1);
         }
     }
+
+    fn call_16(&mut self, msh: u8, lsh: u8)
+    {
+        let pc_bytes = self.pc.reg.to_le_bytes();
+        self.ram.write_to_address(self.sp - 1, pc_bytes[1]);
+        self.ram.write_to_address(self.sp - 2, pc_bytes[0]);
+        self.pc.reg = u16::from_le_bytes([lsh, msh]);
+        self.sp -= 2;
+    }
+
+    fn call_flag_16(&mut self, flag: Flag, msh: u8, lsh: u8)
+    {
+        if self.aux_read_flag(flag) == true
+        {
+            let pc_bytes = self.pc.reg.to_le_bytes();
+            self.ram.write_to_address(self.sp - 1, pc_bytes[1]);
+            self.ram.write_to_address(self.sp - 2, pc_bytes[0]);
+            self.pc.reg = u16::from_le_bytes([lsh, msh]);
+            self.sp -= 2;
+        }
+    }
+
+    fn call_nflag_16(&mut self, flag: Flag, msh: u8, lsh: u8)
+    {
+        if self.aux_read_flag(flag) == false
+        {
+            let pc_bytes = self.pc.reg.to_le_bytes();
+            self.ram.write_to_address(self.sp - 1, pc_bytes[1]);
+            self.ram.write_to_address(self.sp - 2, pc_bytes[0]);
+            self.pc.reg = u16::from_le_bytes([lsh, msh]);
+            self.sp -= 2;
+        }
+    }
+
+    fn ret(&mut self)
+    {
+        let sp_lsh = self.ram.read_from_address(self.sp);
+        let sp_msh = self.ram.read_from_address(self.sp + 1);
+        self.pc.reg = u16::from_le_bytes([sp_lsh, sp_msh]);
+        self.sp += 2;
+    }
+
+    fn ret_flag(&mut self, flag: Flag)
+    {
+        if self.aux_read_flag(flag) == true
+        {
+            self.ret();
+        }
+    }
+
+    fn ret_nflag(&mut self, flag: Flag)
+    {
+        if self.aux_read_flag(flag) == false
+        {
+            self.ret();
+        }
+    }
+
+    fn rst(&mut self, loc: u8)
+    {
+        let pc_bytes = self.pc.reg.to_le_bytes();
+        self.ram.write_to_address(self.sp - 1, pc_bytes[1]);
+        self.ram.write_to_address(self.sp - 2, pc_bytes[0]);
+        self.sp -= 2;
+        self.pc.reg = u16::from_le_bytes([loc, 0]);
+    }
+    
 
     //--------------------16 BIT OPCODES--------------------
 
@@ -762,15 +821,15 @@ impl Cpu
 
     fn push_r16(&mut self, msh: Reg, lsh: Reg)
     {
-        self.ram.write_to_address(self.sp as usize - 1, self.regs[msh]);
-        self.ram.write_to_address(self.sp as usize - 2, self.regs[lsh]);
+        self.ram.write_to_address(self.sp - 1, self.regs[msh]);
+        self.ram.write_to_address(self.sp - 2, self.regs[lsh]);
         self.sp -= 2;
     }
 
     fn pop_r16(&mut self, msh: Reg, lsh: Reg)
     {
-        self.regs[lsh] = self.ram.read_from_address(self.sp as usize);
-        self.regs[msh] = self.ram.read_from_address(self.sp as usize + 1);
+        self.regs[lsh] = self.ram.read_from_address(self.sp);
+        self.regs[msh] = self.ram.read_from_address(self.sp + 1);
         self.sp += 2;
     }
 
@@ -790,14 +849,14 @@ impl Cpu
 
     fn aux_read_pc(&self) -> u8
     {
-        self.ram.read_from_address(self.pc.reg as usize)
+        self.ram.read_from_address(self.pc.reg)
     }
 
     fn aux_read_immediate_data(&mut self) -> u8
     {
         self.pc.reg += 1;
         self.pc.current_instruction_width += 1;
-        self.ram.read_from_address(self.pc.reg as usize)
+        self.ram.read_from_address(self.pc.reg)
     }
 
     pub fn execute(&mut self)
@@ -1064,7 +1123,7 @@ impl Cpu
                 0xBD => {self.cp_r8_r8(REG_A, REG_L);},
                 0xBE => {self.cp_r8_r16a(REG_A, REG_H, REG_L);},
                 0xBF => {self.cp_r8_r8(REG_A, REG_A);},
-                0xC0 => {},
+                0xC0 => {self.ret_nflag(FLAG_Z);},
                 0xC1 => {self.pop_r16(REG_B, REG_C);},
                 0xC2 => {
                     let lsh = self.aux_read_immediate_data();
@@ -1076,23 +1135,33 @@ impl Cpu
                     let msh = self.aux_read_immediate_data();
                     self.jp_pc_16(msh, lsh);
                 },
-                0xC4 => {},
+                0xC4 => {
+                    let lsh = self.aux_read_immediate_data();
+                    let msh = self.aux_read_immediate_data();
+                    self.call_nflag_16(FLAG_Z, msh, lsh);
+                },
                 0xC5 => {self.push_r16(REG_B, REG_C);},
                 0xC6 => {},
-                0xC7 => {},
-                0xC8 => {},
-                0xC9 => {},
+                0xC7 => {self.rst(0x00);},
+                0xC8 => {self.ret_flag(FLAG_Z);},
+                0xC9 => {self.ret();},
                 0xCA => {
                     let lsh = self.aux_read_immediate_data();
                     let msh = self.aux_read_immediate_data();
                     self.jp_flag_pc_16(FLAG_Z, msh, lsh);
                 },
                 0xCB => {},
-                0xCC => {},
-                0xCD => {},
+                0xCC => {
+                    let lsh = self.aux_read_immediate_data();
+                    let msh = self.aux_read_immediate_data();
+                    self.call_flag_16(FLAG_Z, msh, lsh);
+                },
+                0xCD => {let lsh = self.aux_read_immediate_data();
+                    let msh = self.aux_read_immediate_data();
+                    self.call_16(msh, lsh);},
                 0xCE => {},
-                0xCF => {},
-                0xD0 => {},
+                0xCF => {self.rst(0x08);},
+                0xD0 => {self.ret_nflag(FLAG_C);},
                 0xD1 => {self.pop_r16(REG_D, REG_E);},
                 0xD2 => {
                     let lsh = self.aux_read_immediate_data();
@@ -1100,11 +1169,15 @@ impl Cpu
                     self.jp_nflag_pc_16(FLAG_C, msh, lsh);
                 },
                 0xD3 => {self.invalid_instruction(0xD3);},
-                0xD4 => {},
+                0xD4 => {
+                    let lsh = self.aux_read_immediate_data();
+                    let msh = self.aux_read_immediate_data();
+                    self.call_nflag_16(FLAG_C, msh, lsh);
+                },
                 0xD5 => {self.push_r16(REG_D, REG_E);},
                 0xD6 => {},
-                0xD7 => {},
-                0xD8 => {},
+                0xD7 => {self.rst(0x10);},
+                0xD8 => {self.ret_flag(FLAG_C);},
                 0xD9 => {},
                 0xDA => {
                     let lsh = self.aux_read_immediate_data();
@@ -1112,10 +1185,14 @@ impl Cpu
                     self.jp_flag_pc_16(FLAG_C, msh, lsh);
                 },
                 0xDB => {self.invalid_instruction(0xDB);},
-                0xDC => {},
+                0xDC => {
+                    let lsh = self.aux_read_immediate_data();
+                    let msh = self.aux_read_immediate_data();
+                    self.call_flag_16(FLAG_C, msh, lsh);
+                },
                 0xDD => {self.invalid_instruction(0xDD);},
                 0xDE => {},
-                0xDF => {},
+                0xDF => {self.rst(0x18);},
                 0xE0 => {
                     let lsh = self.aux_read_immediate_data();
                     self.ld_16a_r8(0xFF, lsh, REG_A);
@@ -1126,7 +1203,7 @@ impl Cpu
                 0xE4 => {self.invalid_instruction(0xE4);},
                 0xE5 => {self.push_r16(REG_H, REG_L);},
                 0xE6 => {},
-                0xE7 => {},
+                0xE7 => {self.rst(0x20);},
                 0xE8 => {},
                 0xE9 => {self.jp_pc_16(self.regs[REG_H], self.regs[REG_L]);},
                 0xEA => {
@@ -1138,7 +1215,7 @@ impl Cpu
                 0xEC => {self.invalid_instruction(0xEC);},
                 0xED => {self.invalid_instruction(0xED);},
                 0xEE => {},
-                0xEF => {},
+                0xEF => {self.rst(0x28);},
                 0xF0 => {
                     let lsh = self.aux_read_immediate_data();
                     self.ld_r8_16a(REG_A, 0xFF, lsh)
@@ -1149,7 +1226,7 @@ impl Cpu
                 0xF4 => {self.invalid_instruction(0xF4);},
                 0xF5 => {self.push_r16(REG_A, REG_F);},
                 0xF6 => {},
-                0xF7 => {},
+                0xF7 => {self.rst(0x30);},
                 0xF8 => {},
                 0xF9 => {self.ld_sp_r16( REG_H, REG_L);},
                 0xFA => {
@@ -1161,7 +1238,7 @@ impl Cpu
                 0xFC => {self.invalid_instruction(0xFC);},
                 0xFD => {self.invalid_instruction(0xFD);},
                 0xFE => {},
-                0xFF => {}
+                0xFF => {self.rst(0x38);}
             }
         }
         else
