@@ -18,6 +18,7 @@ const FLAG_N:Flag = 6;
 const FLAG_H:Flag = 5;
 const FLAG_C:Flag = 4;
 
+#[derive(Clone, Copy)]
 pub struct ProgramCounter
 {
     pub reg: u16,
@@ -1639,4 +1640,18 @@ impl Cpu
     {
         panic!("Tried to execute invalid instruction {:X?}", opcode);
     }
+
+    // regs: [u8;8],
+    // sp: u16,
+    // ram: Ram,
+    // pc: ProgramCounter
+    #[allow(dead_code)]
+    fn aux_get_reg(&self, regnum: usize) -> u8 { self.regs[regnum] }
+    #[allow(dead_code)]
+    fn aux_get_sp(&self) -> u16 { self.sp }
+    #[allow(dead_code)]
+    fn aux_get_ram(&self) -> Ram { self.ram }
+    #[allow(dead_code)]
+    fn aux_get_pc(&self) -> ProgramCounter { self.pc }
+
 }
