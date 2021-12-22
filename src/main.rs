@@ -24,6 +24,7 @@ fn main()
     canvas.set_logical_size(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
     canvas.set_integer_scale(true).unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
+
     'running: loop
     {
         for event in event_pump.poll_iter()
@@ -54,5 +55,6 @@ fn main()
         thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 
-    let motherboard = Mainboard::new();
+    let motherboard = Mainboard::new(
+        std::fs::File::open("i-need-a-test.rom").unwrap());
 }
