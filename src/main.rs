@@ -4,7 +4,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::rect::{Point};
 use std::time::Duration;
 use std::thread;
-use game_boy_hardware::cpu::Cpu;
+use game_boy_hardware::mainboard::Mainboard;
 
 const SCREEN_WIDTH:i32 = 160;
 const SCREEN_HEIGHT:i32 = 144;
@@ -54,6 +54,5 @@ fn main()
         thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 
-    let mut x = Cpu::new();
-    x.execute(); //Just in place for now to suppress warnings
+    let motherboard = Mainboard::new();
 }
