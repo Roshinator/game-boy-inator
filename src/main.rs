@@ -10,6 +10,12 @@ const SCREEN_WIDTH:i32 = 160;
 const SCREEN_HEIGHT:i32 = 144;
 fn main()
 {
+
+    let mut motherboard = Mainboard::new(
+        std::fs::File::open("Snake.gb").unwrap());
+    
+    motherboard.begin_execution();
+
     // let x: game_boy_hardware::cpu::CPU;
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -54,7 +60,4 @@ fn main()
         canvas.present();
         thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
-
-    let motherboard = Mainboard::new(
-        std::fs::File::open("i-need-a-test.rom").unwrap());
 }

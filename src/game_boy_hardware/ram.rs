@@ -1,6 +1,6 @@
 use std::ops::{Index, IndexMut};
 
-use super::mainboard::Mainboard;
+use super::{mainboard::Mainboard, rom::{self, Rom}};
 
 //DIV: Divider
 pub const DIV:u16 = 0xFF04;
@@ -21,37 +21,62 @@ pub const INTERRUPT_TIMA:u8 = 1 << 2;
 pub const INTERRUPT_SIO_TRANSFER_COMPLETE:u8 = 1 << 3;
 pub const INTERRUPT_P1X_NEG_EDGE:u8 = 1 << 4;
 
-#[derive(Clone, Copy)]
+pub const SC_BOOT_ROM_DISABLE:u16 = 0xFF50;
+
+#[derive(Clone)]
 pub struct Ram
 {
-    mem: [u8;0x10000]
+    mem: [u8;0x10000],
+    rom: Rom
 }
 
 impl Ram
 {
-    pub fn new() -> Ram
+    pub fn new(rom: Rom) -> Ram
     {
-        Ram { mem: [0; 0x10000] }
+        Ram 
+        {
+            mem: [0; 0x10000],
+            rom: rom
+        }
     }
 
     pub fn write(&mut self, address: u16, data: u8)
     {
+        match address
+        {
+            //Boot rom disable
+            SC_BOOT_ROM_DISABLE => {self.rom.bootRomEnabled = false;},
+            _ => {}
+        }
+
         self.mem[address as usize] = data;
     }
 
     pub fn write_rp(&mut self, msh: u8, lsh: u8, data: u8)
     {
-        self.mem[u16::from_le_bytes([msh, lsh]) as usize] = data;
+        self.write(u16::from_le_bytes([msh, lsh]), data);
     }
 
     pub fn read(&self, address: u16) -> u8
     {
-        self.mem[address as usize]
+        match address
+        {
+            0x0000..=0x0100 =>
+            {
+                if self.rom.bootRomEnabled
+                {
+                    return rom::BOOT_ROM[address as usize];
+                }
+                self.mem[address as usize]
+            },
+            _ => self.mem[address as usize]
+        }
     }
 
     pub fn read_rp(&self, msh: u8, lsh: u8) -> u8
     {
-        self.mem[u16::from_le_bytes([msh, lsh]) as usize]
+        self.read(u16::from_le_bytes([msh, lsh]))
     }
 
     //Interrupts

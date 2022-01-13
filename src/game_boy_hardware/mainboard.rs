@@ -8,7 +8,6 @@ pub struct Mainboard
 {
     cpu: Cpu,
     ram: Ram,
-    rom: Rom,
     timer: Timer,
     clock: Duration,
     clock_enable: bool,
@@ -24,11 +23,10 @@ impl Mainboard
         Mainboard
         {
             cpu: Cpu::new(),
-            ram: Ram::new(),
-            rom: Rom::new(rom),
+            ram: Ram::new(Rom::new(rom)),
             timer: Timer::new(),
             clock: Duration::from_secs_f64(1_f64 / CLOCK_EDGE),
-            clock_enable: false,
+            clock_enable: true,
             cycles: 0,
             t_cycles: 0,
             m_cycles: 0
@@ -37,7 +35,6 @@ impl Mainboard
 
     pub fn begin_execution(&mut self)
     {
-        //Load the file into memory
 
         loop
         {

@@ -77,7 +77,7 @@ impl Cpu
     {
         Cpu
         {
-            regs: [0;8],
+            regs: [0x01, 0x00, 0x13, 0x00, 0xD8, 0xB0, 0x01, 0x4D],
             sp: 0,
             pc: ProgramCounter
             {
@@ -1169,7 +1169,7 @@ impl Cpu
 
     pub fn execute(&mut self, ram: &mut Ram)
     {
-        if self.pc.current_instruction_cycles > 0
+        if self.pc.current_instruction_cycles > 1
         {
             self.pc.current_instruction_cycles -= 1;
             return;
@@ -1209,6 +1209,7 @@ impl Cpu
 
 
         let instruction = self.aux_read_pc(ram);
+        println!("Instruction: 0x{:02X?}", instruction);
         if instruction != 0xCB
         {
             match instruction
