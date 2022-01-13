@@ -3,5 +3,7 @@ pub mod ram;
 pub mod mainboard;
 
 mod rom;
+mod timer;
 
 mod tests;
+

@@ -18,7 +18,7 @@ const FLAG_N:Flag = 6;
 const FLAG_H:Flag = 5;
 const FLAG_C:Flag = 4;
 
-const ZeroInstructionTimeTable:[u8;0x100] = //M-cycle timings
+const ZERO_INSTRUCTION_TIME_TABLE:[u8;0x100] = //M-cycle timings
     [1,3,2,2,1,1,2,1,5,2,2,2,1,1,2,1,
      1,3,2,2,1,1,2,1,3,2,2,2,1,1,2,1,
      2,3,2,2,1,1,2,1,2,2,2,2,1,1,2,1,
@@ -36,7 +36,7 @@ const ZeroInstructionTimeTable:[u8;0x100] = //M-cycle timings
      3,3,2,0,0,4,2,4,4,1,4,0,0,0,2,4,
      3,3,2,1,0,4,2,4,3,2,4,1,0,0,2,4];
 
-const CBInstructionTimeTable:[u8;0x100] = //M-Cycle timings
+const CB_INSTRUCTION_TIME_TABLE:[u8;0x100] = //M-Cycle timings
     [2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
      2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
      2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
@@ -1559,7 +1559,7 @@ impl Cpu
                 0xFF => {self.rst(ram, 0x38);}
             }
 
-            self.pc.current_instruction_cycles += ZeroInstructionTimeTable[instruction as usize];
+            self.pc.current_instruction_cycles += ZERO_INSTRUCTION_TIME_TABLE[instruction as usize];
         }
         else
         {
@@ -1824,7 +1824,7 @@ impl Cpu
                 0xFF => {self.set_r8(7, REG_A);}
             }
 
-            self.pc.current_instruction_cycles += CBInstructionTimeTable[cb_instruction as usize];
+            self.pc.current_instruction_cycles += CB_INSTRUCTION_TIME_TABLE[cb_instruction as usize];
         }
 
         self.aux_inc_pc();
