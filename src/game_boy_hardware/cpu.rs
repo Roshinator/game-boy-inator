@@ -1,4 +1,4 @@
-use super::ram::Ram;
+use super::ram::{self, Ram};
 
 type Reg = usize;
 const REG_A:Reg = 0;
@@ -67,7 +67,8 @@ pub struct Cpu
 {
     regs: [u8;8],
     sp: u16,
-    pc: ProgramCounter
+    pc: ProgramCounter,
+    ime: bool
 }
 
 impl Cpu
@@ -81,7 +82,8 @@ impl Cpu
             pc: ProgramCounter
             {
                 reg: 0, should_increment: true, current_instruction_width: 1, current_instruction_cycles: 0
-            }
+            },
+            ime: false
         }
     }
     //Format [name]_[param1]_[param2]
@@ -139,21 +141,21 @@ impl Cpu
 
     fn ld_r16a_8(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg, p2: u8)
     {
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], p2);
+        ram.write_rp(self.regs[msh], self.regs[lsh], p2);
     }
 
     fn ld_16a_r8(&mut self, ram: &mut Ram, msh: u8, lsh: u8, p2: Reg)
     {
-        ram.write_to_address_rp(msh, lsh, self.regs[p2]);
+        ram.write_rp(msh, lsh, self.regs[p2]);
     }
 
     fn ld_16a_sp(&mut self, ram: &mut Ram, msh: u8, lsh: u8)
     {
         let bytes = self.sp.to_le_bytes();
-        ram.write_to_address_rp(msh, lsh, bytes[0]);
+        ram.write_rp(msh, lsh, bytes[0]);
 
         let result = self.aux_inc_16(msh, lsh);
-        ram.write_to_address_rp(result.1, result.0, bytes[1]);
+        ram.write_rp(result.1, result.0, bytes[1]);
     }
 
     fn ld_r8_r8(&mut self, p1: Reg, p2: Reg)
@@ -168,19 +170,19 @@ impl Cpu
 
     fn ld_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let x = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let x = ram.read_rp(self.regs[msh], self.regs[lsh]);
         self.regs[p1] = x;
     }
 
     fn ld_r8_16a(&mut self, ram: &mut Ram, p1: Reg, msh: u8, lsh: u8)
     {
-        let x = ram.read_from_address_rp(msh, lsh);
+        let x = ram.read_rp(msh, lsh);
         self.regs[p1] = x;
     }
 
     fn ld_r16a_r8(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg, p2: Reg)
     {
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], self.regs[p2]);
+        ram.write_rp(self.regs[msh], self.regs[lsh], self.regs[p2]);
     }
 
     // TODO: See if the flags are modified
@@ -218,9 +220,9 @@ impl Cpu
 
     fn inc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let result = ram.read_from_address_rp(
+        let result = ram.read_rp(
             self.regs[msh], self.regs[lsh]).overflowing_add(1);
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result.0);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result.0);
 
         self.aux_write_flag(FLAG_Z, result.0 == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -239,9 +241,9 @@ impl Cpu
 
     fn dec_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let result = ram.read_from_address_rp(
+        let result = ram.read_rp(
             self.regs[msh], self.regs[lsh]).overflowing_sub(1);
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result.0);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result.0);
 
         self.aux_write_flag(FLAG_Z, result.0 == 0);
         self.aux_write_flag(FLAG_N, true);
@@ -326,7 +328,7 @@ impl Cpu
 
     fn add_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let p2 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(p2);
         self.regs[p1] = result.0;
@@ -389,7 +391,7 @@ impl Cpu
     fn adc_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
         let carry = self.aux_read_flag(FLAG_C) as u8;
-        let p2 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_add(p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -433,7 +435,7 @@ impl Cpu
 
     fn sub_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let p2 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(p2);
         self.regs[p1] = result.0;
@@ -482,7 +484,7 @@ impl Cpu
     fn sbc_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
         let carry = self.aux_read_flag(FLAG_C) as u8;
-        let p2 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_sub(p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -519,7 +521,7 @@ impl Cpu
 
     fn and_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        self.regs[p1] &= ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        self.regs[p1] &= ram.read_rp(self.regs[msh], self.regs[lsh]);
 
         self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
         self.aux_write_flag(FLAG_H, true);
@@ -549,7 +551,7 @@ impl Cpu
 
     fn xor_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        self.regs[p1] ^= ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        self.regs[p1] ^= ram.read_rp(self.regs[msh], self.regs[lsh]);
 
         self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
         self.aux_write_flag(FLAG_H, false);
@@ -579,7 +581,7 @@ impl Cpu
 
     fn or_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        self.regs[p1] |= ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        self.regs[p1] |= ram.read_rp(self.regs[msh], self.regs[lsh]);
 
         self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
         self.aux_write_flag(FLAG_H, false);
@@ -615,7 +617,7 @@ impl Cpu
 
     fn cp_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let p2 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result = self.regs[p1].overflowing_add(p2);
         self.regs[p1] = result.0;
@@ -777,8 +779,8 @@ impl Cpu
     fn call_16(&mut self, ram: &mut Ram, msh: u8, lsh: u8)
     {
         let pc_bytes = self.pc.reg.to_le_bytes();
-        ram.write_to_address(self.sp - 1, pc_bytes[1]);
-        ram.write_to_address(self.sp - 2, pc_bytes[0]);
+        ram.write(self.sp - 1, pc_bytes[1]);
+        ram.write(self.sp - 2, pc_bytes[0]);
         self.pc.reg = u16::from_le_bytes([lsh, msh]);
         self.sp -= 2;
     }
@@ -788,8 +790,8 @@ impl Cpu
         if self.aux_read_flag(flag) == true
         {
             let pc_bytes = self.pc.reg.to_le_bytes();
-            ram.write_to_address(self.sp - 1, pc_bytes[1]);
-            ram.write_to_address(self.sp - 2, pc_bytes[0]);
+            ram.write(self.sp - 1, pc_bytes[1]);
+            ram.write(self.sp - 2, pc_bytes[0]);
             self.pc.reg = u16::from_le_bytes([lsh, msh]);
             self.sp -= 2;
         }
@@ -800,8 +802,8 @@ impl Cpu
         if self.aux_read_flag(flag) == false
         {
             let pc_bytes = self.pc.reg.to_le_bytes();
-            ram.write_to_address(self.sp - 1, pc_bytes[1]);
-            ram.write_to_address(self.sp - 2, pc_bytes[0]);
+            ram.write(self.sp - 1, pc_bytes[1]);
+            ram.write(self.sp - 2, pc_bytes[0]);
             self.pc.reg = u16::from_le_bytes([lsh, msh]);
             self.sp -= 2;
         }
@@ -809,8 +811,8 @@ impl Cpu
 
     fn ret(&mut self, ram: &mut Ram)
     {
-        let sp_lsh = ram.read_from_address(self.sp);
-        let sp_msh = ram.read_from_address(self.sp + 1);
+        let sp_lsh = ram.read(self.sp);
+        let sp_msh = ram.read(self.sp + 1);
         self.pc.reg = u16::from_le_bytes([sp_lsh, sp_msh]);
         self.sp += 2;
     }
@@ -834,8 +836,8 @@ impl Cpu
     fn rst(&mut self, ram: &mut Ram, loc: u8)
     {
         let pc_bytes = self.pc.reg.to_le_bytes();
-        ram.write_to_address(self.sp - 1, pc_bytes[1]);
-        ram.write_to_address(self.sp - 2, pc_bytes[0]);
+        ram.write(self.sp - 1, pc_bytes[1]);
+        ram.write(self.sp - 2, pc_bytes[0]);
         self.sp -= 2;
         self.pc.reg = u16::from_le_bytes([loc, 0]);
     }
@@ -865,10 +867,10 @@ impl Cpu
 
     fn rlc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let p1 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
         let result = p1.rotate_left(1);
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -897,10 +899,10 @@ impl Cpu
 
     fn rrc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let p1 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, p1 & 1 != 0);
         let result = p1.rotate_right(1);
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -932,10 +934,10 @@ impl Cpu
     fn rl_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
         let cin = self.aux_read_flag(FLAG_C) as u8;
-        let p1 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
         let result = (p1 << 1u8) | cin;
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -967,10 +969,10 @@ impl Cpu
     fn rr_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
         let cin = self.aux_read_flag(FLAG_C) as u8;
-        let p1 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, p1 & 1 != 0);
         let result = (p1 >> 1u8) | (cin << 7u8);
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -989,10 +991,10 @@ impl Cpu
 
     fn sla_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let p1 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
         let result = p1 << 1u8;
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -1011,10 +1013,10 @@ impl Cpu
 
     fn sra_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let p1 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, p1 & 1 != 0);
         let result =( p1 >> 1u8) | (p1 | 0b10000000u8);
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -1033,10 +1035,10 @@ impl Cpu
 
     fn srl_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let p1 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         self.aux_write_flag(FLAG_C, p1 & 1 != 0);
         let result = p1 >> 1u8;
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
         self.aux_write_flag(FLAG_Z, result == 0);
         self.aux_write_flag(FLAG_N, false);
@@ -1052,10 +1054,10 @@ impl Cpu
 
     fn swap_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let p1 = ram.read_from_address_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         let lower_to_upper_half = p1 << 4u8;
         let upper_to_lower_half = p1 >> 4u8;
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh], lower_to_upper_half | upper_to_lower_half);
+        ram.write_rp(self.regs[msh], self.regs[lsh], lower_to_upper_half | upper_to_lower_half);
     }
 
     fn bit_r8(&mut self, p1: u8, p2: Reg)
@@ -1070,7 +1072,7 @@ impl Cpu
         self.aux_write_flag(FLAG_H, true);
         self.aux_write_flag(FLAG_N, false);
         self.aux_write_flag(FLAG_Z,
-            (ram.read_from_address_rp(self.regs[msh], self.regs[lsh]) & (1u8 << p1)) == 0);
+            (ram.read_rp(self.regs[msh], self.regs[lsh]) & (1u8 << p1)) == 0);
     }
 
     fn res_r8(&mut self, p1: u8, p2: Reg)
@@ -1080,8 +1082,8 @@ impl Cpu
 
     fn res_r16a(&mut self, ram: &mut Ram, p1: u8, msh: Reg, lsh: Reg)
     {
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh],
-            ram.read_from_address_rp(self.regs[msh], self.regs[lsh]) & (!(1u8 << p1)));
+        ram.write_rp(self.regs[msh], self.regs[lsh],
+            ram.read_rp(self.regs[msh], self.regs[lsh]) & (!(1u8 << p1)));
     }
 
     fn set_r8(&mut self, p1: u8, p2: Reg)
@@ -1091,22 +1093,52 @@ impl Cpu
 
     fn set_r16a(&mut self, ram: &mut Ram, p1: u8, msh: Reg, lsh: Reg)
     {
-        ram.write_to_address_rp(self.regs[msh], self.regs[lsh],
-            ram.read_from_address_rp(self.regs[msh], self.regs[lsh]) | (1u8 << p1));
+        ram.write_rp(self.regs[msh], self.regs[lsh],
+            ram.read_rp(self.regs[msh], self.regs[lsh]) | (1u8 << p1));
     }
 
     fn push_r16(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        ram.write_to_address(self.sp - 1, self.regs[msh]);
-        ram.write_to_address(self.sp - 2, self.regs[lsh]);
+        ram.write(self.sp - 1, self.regs[msh]);
+        ram.write(self.sp - 2, self.regs[lsh]);
+        self.sp -= 2;
+    }
+
+    fn push_pc(&mut self, ram: &mut Ram)
+    {
+        let bytes = self.pc.reg.to_le_bytes();
+        ram.write(self.sp - 1, bytes[1]);
+        ram.write(self.sp - 2, bytes[0]);
         self.sp -= 2;
     }
 
     fn pop_r16(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        self.regs[lsh] = ram.read_from_address(self.sp);
-        self.regs[msh] = ram.read_from_address(self.sp + 1);
+        self.regs[lsh] = ram.read(self.sp);
+        self.regs[msh] = ram.read(self.sp + 1);
         self.sp += 2;
+    }
+
+    //----------INTERRUPT MANAGEMENT----------
+
+    fn reti(&mut self, ram: &mut Ram)
+    {
+        let l_bytes = ram.read(self.sp);
+        self.inc_sp();
+        let h_bytes = ram.read(self.sp);
+        self.inc_sp();
+        self.pc.reg = u16::from_le_bytes([l_bytes, h_bytes]);
+        self.ime = true;
+    }
+
+    fn ei(&mut self)
+    {
+        self.ime = true;
+    }
+
+    fn di(&mut self)
+    {
+        self.ime = false;
     }
 
     //----------EXECUTION FUNCTIONS----------
@@ -1125,14 +1157,14 @@ impl Cpu
 
     fn aux_read_pc(&self,  ram: &mut Ram) -> u8
     {
-        ram.read_from_address(self.pc.reg)
+        ram.read(self.pc.reg)
     }
 
     fn aux_read_immediate_data(&mut self, ram: &mut Ram) -> u8
     {
         self.pc.reg += 1;
         self.pc.current_instruction_width += 1;
-        ram.read_from_address(self.pc.reg)
+        ram.read(self.pc.reg)
     }
 
     pub fn execute(&mut self, ram: &mut Ram)
@@ -1142,6 +1174,39 @@ impl Cpu
             self.pc.current_instruction_cycles -= 1;
             return;
         }
+
+        //Fetch
+        if self.ime
+        {
+            let valid_interrupts = ram.read(ram::IF) & ram.read(ram::IE);
+            if valid_interrupts != 0
+            {
+                self.ime = false;
+                self.push_pc(ram);
+            }
+            if valid_interrupts & ram::INTERRUPT_VB != 0
+            {
+                self.pc.reg = 0x0040;
+            }
+            else if valid_interrupts & ram::INTERRUPT_LCDC != 0
+            {
+                self.pc.reg = 0x0048;
+            }
+            else if valid_interrupts & ram::INTERRUPT_TIMA != 0
+            {
+                self.pc.reg = 0x0050;
+            }
+            else if valid_interrupts & ram::INTERRUPT_SIO_TRANSFER_COMPLETE != 0
+            {
+                self.pc.reg = 0x0058;
+            }
+            else if valid_interrupts & ram::INTERRUPT_P1X_NEG_EDGE != 0
+            {
+                self.pc.reg = 0x0060;
+            }
+            
+        }
+
 
         let instruction = self.aux_read_pc(ram);
         if instruction != 0xCB
@@ -1475,7 +1540,7 @@ impl Cpu
                 },
                 0xD7 => {self.rst(ram, 0x10);},
                 0xD8 => {self.ret_flag(ram, FLAG_C);},
-                0xD9 => {},
+                0xD9 => {self.reti(ram);},
                 0xDA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
@@ -1531,7 +1596,7 @@ impl Cpu
                 },
                 0xF1 => {self.pop_r16(ram, REG_A, REG_F);},
                 0xF2 => {self.ld_r8_16a(ram, REG_A, 0xFF, self.regs[REG_C]);},
-                0xF3 => {},
+                0xF3 => {self.di();},
                 0xF4 => {self.invalid_instruction(0xF4);},
                 0xF5 => {self.push_r16(ram, REG_A, REG_F);},
                 0xF6 => {
@@ -1549,7 +1614,7 @@ impl Cpu
                     let msh = self.aux_read_immediate_data(ram);
                     self.ld_r8_16a(ram, REG_A, msh, lsh);
                 },
-                0xFB => {},
+                0xFB => {self.ei();},
                 0xFC => {self.invalid_instruction(0xFC);},
                 0xFD => {self.invalid_instruction(0xFD);},
                 0xFE => {

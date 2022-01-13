@@ -25,7 +25,7 @@ impl Timer
     pub fn execute(&mut self, ram: &mut Ram, m_cycles: u64)
     {
         //Writing to the divider resets the internal counter
-        let divider = ram.read_from_address(ram::DIV);
+        let divider = ram.read(ram::DIV);
         if divider != self.internal_counter.to_le_bytes()[1]
         {
             self.internal_counter = 0;
@@ -34,9 +34,9 @@ impl Timer
         //Increment internal counter
         self.internal_counter = self.internal_counter.wrapping_add(1);
         let bytes = self.internal_counter.to_le_bytes();
-        ram.write_to_address(ram::DIV, bytes[1]);
+        ram.write(ram::DIV, bytes[1]);
 
-        let tac_val = ram.read_from_address(ram::TAC);
+        let tac_val = ram.read(ram::TAC);
         let old_timer_enable = self.tima_enabled;
         self.tima_enabled = tac_val & (1 << 2) != 0;
         let timer_clock = INPUT_CLOCK_SELECT_CYCLE_COUNT[(tac_val & 0b00000011_u8) as usize];
@@ -47,7 +47,7 @@ impl Timer
             ram.set_interrupt(ram::INTERRUPT_TIMA);
             self.tima_overflow = false;
 
-            ram.write_to_address(ram::TIMA, ram.read_from_address(ram::TMA));
+            ram.write(ram::TIMA, ram.read(ram::TMA));
         }
 
         if self.tima_enabled
@@ -67,9 +67,9 @@ impl Timer
 
     fn timer_increment(&mut self, ram: &mut Ram) -> bool
     {
-        let tima_val = ram.read_from_address(ram::TIMA);
+        let tima_val = ram.read(ram::TIMA);
         let tima_inc = tima_val.overflowing_add(1);
-        ram.write_to_address(ram::TIMA, tima_inc.0);
+        ram.write(ram::TIMA, tima_inc.0);
         tima_inc.1
     }
 }
