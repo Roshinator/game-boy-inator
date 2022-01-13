@@ -1147,7 +1147,7 @@ impl Cpu
     {
         if self.pc.should_increment
         {
-            self.pc.reg += self.pc.current_instruction_width;
+            self.pc.reg += 1;
         }
         else
         {
@@ -1630,6 +1630,7 @@ impl Cpu
         else
         {
             let cb_instruction = self.aux_read_immediate_data(ram);
+            println!("Instruction: 0x{:02X?}", cb_instruction);
             match cb_instruction //CB Prefix
             {
                 0x00 => {self.rlc_r8(REG_B);},
