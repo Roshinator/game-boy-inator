@@ -4,6 +4,6 @@ pub mod mainboard;
 
 mod rom;
 mod timer;
+mod ppu;
 
 mod tests;
-

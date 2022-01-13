@@ -1,6 +1,6 @@
 use std::{fs::File, io::Read};
 
-pub const BOOT_ROM:[u8;256] = 
+pub const BOOT_ROM:[u8;256] =
 [
     0x31,0xFE,0xFF,0xAF,0x21,0xFF,0x9F,0x32,0xCB,0x7C,0x20,0xFB,0x21,0x26,0xFF,0x0E,
     0x11,0x3E,0x80,0x32,0xE2,0x0C,0x3E,0xF3,0xE2,0x32,0x3E,0x77,0x77,0x3E,0xFC,0xE0,
@@ -24,7 +24,7 @@ pub const BOOT_ROM:[u8;256] =
 pub struct Rom
 {
     pub bytes: Vec<u8>,
-    pub bootRomEnabled: bool
+    pub boot_rom_enabled: bool
 }
 
 impl Rom
@@ -37,10 +37,10 @@ impl Rom
         let rom = Rom
         {
             bytes: bytes,
-            bootRomEnabled: true
+            boot_rom_enabled: true
         };
         return rom;
     }
 
-    
+
 }

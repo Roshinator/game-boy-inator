@@ -1,6 +1,7 @@
-use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut, RangeInclusive};
 
 use super::{mainboard::Mainboard, rom::{self, Rom}};
+
 
 //DIV: Divider
 pub const DIV:u16 = 0xFF04;
@@ -10,6 +11,7 @@ pub const TIMA:u16 = 0xFF05;
 pub const TMA:u16 = 0xFF06;
 //TAC: Timer control register
 pub const TAC:u16 = 0xFF07;
+
 //Interrupt request
 pub const IF:u16 = 0xFF0F;
 //Interrupt enable
@@ -34,7 +36,7 @@ impl Ram
 {
     pub fn new(rom: Rom) -> Ram
     {
-        Ram 
+        Ram
         {
             mem: [0; 0x10000],
             rom: rom
@@ -46,7 +48,7 @@ impl Ram
         match address
         {
             //Boot rom disable
-            SC_BOOT_ROM_DISABLE => {self.rom.bootRomEnabled = false;},
+            SC_BOOT_ROM_DISABLE => {self.rom.boot_rom_enabled = false;},
             _ => {}
         }
 
@@ -64,7 +66,7 @@ impl Ram
         {
             0x0000..=0x0100 =>
             {
-                if self.rom.bootRomEnabled
+                if self.rom.boot_rom_enabled
                 {
                     return rom::BOOT_ROM[address as usize];
                 }
@@ -102,7 +104,7 @@ impl Ram
     }
 
     //Timers
-    
+
 
 }
 
