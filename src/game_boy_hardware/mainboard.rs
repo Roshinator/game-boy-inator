@@ -1,6 +1,6 @@
 use std::{time::Duration, thread, fs::*, io::Read};
 
-use super::{cpu::Cpu, ram::Ram, rom::Rom, timer::Timer};
+use super::{cpu::Cpu, ram::Ram, rom::Rom, timer::Timer, ppu::Ppu};
 
 pub const CLOCK_EDGE:f64 = 8_338_608_f64;
 
@@ -8,6 +8,7 @@ pub struct Mainboard
 {
     cpu: Cpu,
     ram: Ram,
+    ppu: Ppu,
     timer: Timer,
     clock: Duration,
     clock_enable: bool,
@@ -24,6 +25,7 @@ impl Mainboard
         {
             cpu: Cpu::new(),
             ram: Ram::new(Rom::new(rom)),
+            ppu: Ppu::new(),
             timer: Timer::new(),
             clock: Duration::from_secs_f64(1_f64 / CLOCK_EDGE),
             clock_enable: true,
@@ -48,6 +50,7 @@ impl Mainboard
                 if self.cycles % 8 == 0 //M-cycle-pos (1,048,576 hz)
                 {
                     self.cpu.execute(&mut self.ram);
+                    self.ppu.execute(&mut self.ram);
 
                     self.m_cycles += 1;
                 }

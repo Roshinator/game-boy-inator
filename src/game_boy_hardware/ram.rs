@@ -1,8 +1,8 @@
-use std::ops::{Index, IndexMut, RangeInclusive};
+use std::ops::{RangeInclusive};
 
-use super::{mainboard::Mainboard, rom::{self, Rom}};
+use super::{rom::{self, Rom}};
 
-
+//----Timer Registers----
 //DIV: Divider
 pub const DIV:u16 = 0xFF04;
 //TIMA: Timer counter
@@ -12,11 +12,27 @@ pub const TMA:u16 = 0xFF06;
 //TAC: Timer control register
 pub const TAC:u16 = 0xFF07;
 
+//----LCD Registers----
+pub const LCDC:u16 = 0xFF40;
+pub const STAT:u16 = 0xFF41;
+pub const SCY:u16 = 0xFF42;
+pub const SCX:u16 = 0xFF43;
+pub const LY:u16 = 0xFF44;
+pub const LYC:u16 = 0xFF45;
+pub const BGP:u16 = 0xFF47;
+pub const OBP0:u16 = 0xFF48;
+pub const OBP1:u16 = 0xFF49;
+pub const WY:u16 = 0xFF4A;
+pub const WX:u16 = 0xFF4B;
+pub const OAM:RangeInclusive<u16> = 0xFE00..=0xFE9F;
+
+//----Interrupt Registers----
 //Interrupt request
 pub const IF:u16 = 0xFF0F;
 //Interrupt enable
 pub const IE:u16 = 0xFFFF;
 
+//----Interrupt Bits----
 pub const INTERRUPT_VB:u8 = 1 << 0;
 pub const INTERRUPT_LCDC:u8 = 1 << 1;
 pub const INTERRUPT_TIMA:u8 = 1 << 2;
@@ -97,26 +113,17 @@ impl Ram
     {
         self.mem[IF as usize] = !(!self.mem[IF as usize] | interrupt);
     }
-
-    pub fn test(&mut self, mb: &Mainboard)
-    {
-
-    }
-
-    //Timers
-
-
 }
 
-impl Index<u16> for Ram
-{
-    type Output = u8;
+// impl Index<u16> for Ram
+// {
+//     type Output = u8;
 
-    fn index(&self, index: u16) -> &u8
-    {
-        &self.mem[index as usize]
-    }
-}
+//     fn index(&self, index: u16) -> &u8
+//     {
+//         &self.mem[index as usize]
+//     }
+// }
 
 // impl IndexMut<u16> for Ram
 // {
