@@ -3,12 +3,12 @@ use super::ram::Ram;
 
 const SCREEN_WIDTH:usize = 160;
 const SCREEN_HEIGHT:usize = 144;
-const COLORS:[Color; 4] = 
+const COLORS:[Color; 4] =
 [
     Color::RGB(0xFF, 0xFF, 0xFF),
     Color::RGB(0xAA, 0xAA, 0xAA),
     Color::RGB(0x55, 0x55, 0x55),
-    Color::RGB(0x00, 0x00, 0x00),    
+    Color::RGB(0x00, 0x00, 0x00),
 ];
 
 const LCDC_OBJ_ON:u8 = 1 << 1;
@@ -51,7 +51,7 @@ impl Ppu
         let sdl_context = sdl2::init().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
 
-        let window = video_subsystem.window("Game Boy Inator", 800, 600)
+        let window = video_subsystem.window("Game Boy Inator", 810, 730)
             .position_centered()
             .resizable()
             .build()
