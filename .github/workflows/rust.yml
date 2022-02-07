@@ -17,6 +17,7 @@ jobs:
     - name: Update Rust
       run: rustup update
     - name: Build static-link
+      continue-on-error: true
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
       if: ${{failure()}}
@@ -31,6 +32,7 @@ jobs:
     - name: Update Rust
       run: rustup update
     - name: Build static-link
+      continue-on-error: true
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
       if: ${{failure()}}
@@ -45,6 +47,7 @@ jobs:
     - name: Update Rust
       run: rustup update
     - name: Build static-link
+      continue-on-error: true
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
       if: ${{failure()}}
