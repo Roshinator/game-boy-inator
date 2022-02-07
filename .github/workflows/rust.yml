@@ -16,15 +16,9 @@ jobs:
     - uses: actions/checkout@v2
     - name: Update Rust
       run: rustup update
-    - name: Build static-link
-      id: static
-      run: cargo build --release --verbose --features "sdl2/static-link"
-    - name: Build dynamic-link
-      id: dynamic
-      if: ${{steps.static.status == 'failure'}}
+    - name: Build
       run: cargo build --release --verbose
     - name: Run Tests
-      if: ${{steps.static.status != 'failure' || steps.dynamic.status != 'failure'}}
       run: cargo test --release --verbose
 
   build-mac:
@@ -33,15 +27,9 @@ jobs:
     - uses: actions/checkout@v2
     - name: Update Rust
       run: rustup update
-    - name: Build static-link
-      id: static
-      run: cargo build --release --verbose --features "sdl2/static-link"
-    - name: Build dynamic-link
-      id: dynamic
-      if: ${{steps.static.status == 'failure'}}
+    - name: Build
       run: cargo build --release --verbose
     - name: Run Tests
-      if: ${{steps.static.status != 'failure' || steps.dynamic.status != 'failure'}}
       run: cargo test --release --verbose
 
   build-windows:
@@ -50,13 +38,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: Update Rust
       run: rustup update
-    - name: Build static-link
-      id: static
-      run: cargo build --release --verbose --features "sdl2/static-link"
-    - name: Build dynamic-link
-      id: dynamic
-      if: ${{steps.static.status == 'failure'}}
+    - name: Build
       run: cargo build --release --verbose
     - name: Run Tests
-      if: ${{steps.static.status != 'failure' || steps.dynamic.status != 'failure'}}
       run: cargo test --release --verbose
