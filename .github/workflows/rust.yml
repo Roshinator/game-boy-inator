@@ -10,35 +10,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-linux:
+  build:
 
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: update dependencies
-      run: rustup update
-    - name: Build
-      run: cargo build --release --verbose
-    - name: Run tests
-      run: cargo test --release --verbose
-
-  build-mac:
-
-    runs-on: macos-latest
-
-    steps:
-    - uses: actions/checkout@v2
-    - name: update dependencies
-      run: rustup update
-    - name: Build
-      run: cargo build --release --verbose
-    - name: Run tests
-      run: cargo test --release --verbose
-
-  build-windows:
-
-    runs-on: windows-latest
-
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    
     steps:
     - uses: actions/checkout@v2
     - name: update dependencies
