@@ -18,6 +18,8 @@ jobs:
       run: rustup update
     - name: Build
       run: cargo build --release --verbose
+    - name: Run Tests
+      run: cargo test --release --verbose
 
   build-mac:
     runs-on: macos-latest
@@ -27,6 +29,8 @@ jobs:
       run: rustup update
     - name: Build
       run: cargo build --release --verbose
+    - name: Run Tests
+      run: cargo test --release --verbose
 
   build-windows:
     runs-on: windows-latest
@@ -36,33 +40,5 @@ jobs:
       run: rustup update
     - name: Build
       run: cargo build --release --verbose
-      
-  test-linux:
-    needs: build-linux
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Update Rust
-      run: rustup update
-    - name: Run Tests
-      run: cargo test --release --verbose
-      
-  test-mac:
-    needs: build-mac
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Update Rust
-      run: rustup update
-    - name: Run Tests
-      run: cargo test --release --verbose
-      
-  test-windows:
-    needs: build-windows
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Update Rust
-      run: rustup update
     - name: Run Tests
       run: cargo test --release --verbose
