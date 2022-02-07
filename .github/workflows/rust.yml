@@ -21,10 +21,10 @@ jobs:
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
       id: dynamic
-      if: ${{static.status == 'failure'}}
+      if: ${{steps.static.status == 'failure'}}
       run: cargo build --release --verbose
     - name: Run Tests
-      if: ${{static.status != 'failure' || dynamic.status != 'failure'}}
+      if: ${{steps.static.status != 'failure' || steps.dynamic.status != 'failure'}}
       run: cargo test --release --verbose
 
   build-mac:
@@ -38,10 +38,10 @@ jobs:
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
       id: dynamic
-      if: ${{static.status == 'failure'}}
+      if: ${{steps.static.status == 'failure'}}
       run: cargo build --release --verbose
     - name: Run Tests
-      if: ${{static.status != 'failure' || dynamic.status != 'failure'}}
+      if: ${{steps.static.status != 'failure' || steps.dynamic.status != 'failure'}}
       run: cargo test --release --verbose
 
   build-windows:
@@ -55,8 +55,8 @@ jobs:
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
       id: dynamic
-      if: ${{static.status == 'failure'}}
+      if: ${{steps.static.status == 'failure'}}
       run: cargo build --release --verbose
     - name: Run Tests
-      if: ${{static.status != 'failure' || dynamic.status != 'failure'}}
+      if: ${{steps.static.status != 'failure' || steps.dynamic.status != 'failure'}}
       run: cargo test --release --verbose
