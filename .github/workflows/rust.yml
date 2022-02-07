@@ -10,19 +10,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-linux-static:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: Update Rust
       run: rustup update
     - name: Build static-link
-      continue-on-error: true
+      id: static
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
-      if: ${{failure()}}
+      id: dynamic
+      if: ${{static.status == 'failure'}}
       run: cargo build --release --verbose
     - name: Run Tests
+      if: ${{static.status != 'failure' || dynamic.status != 'failure'}}
       run: cargo test --release --verbose
 
   build-mac:
@@ -32,12 +34,14 @@ jobs:
     - name: Update Rust
       run: rustup update
     - name: Build static-link
-      continue-on-error: true
+      id: static
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
-      if: ${{failure()}}
+      id: dynamic
+      if: ${{static.status == 'failure'}}
       run: cargo build --release --verbose
     - name: Run Tests
+      if: ${{static.status != 'failure' || dynamic.status != 'failure'}}
       run: cargo test --release --verbose
 
   build-windows:
@@ -47,10 +51,12 @@ jobs:
     - name: Update Rust
       run: rustup update
     - name: Build static-link
-      continue-on-error: true
+      id: static
       run: cargo build --release --verbose --features "sdl2/static-link"
     - name: Build dynamic-link
-      if: ${{failure()}}
+      id: dynamic
+      if: ${{static.status == 'failure'}}
       run: cargo build --release --verbose
     - name: Run Tests
+      if: ${{static.status != 'failure' || dynamic.status != 'failure'}}
       run: cargo test --release --verbose
