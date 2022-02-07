@@ -11,39 +11,34 @@ env:
 
 jobs:
   build-linux:
-
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: update dependencies
+    - name: Update Rust
       run: rustup update
     - name: Build
       run: cargo build --release --verbose
-    - name: Run tests
+    - name: Run Tests
       run: cargo test --release --verbose
 
   build-mac:
-
     runs-on: macos-latest
-
     steps:
     - uses: actions/checkout@v2
-    - name: update dependencies
+    - name: Update Rust
       run: rustup update
     - name: Build
       run: cargo build --release --verbose
-    - name: Run tests
+    - name: Run Tests
       run: cargo test --release --verbose
 
   build-windows:
-
     runs-on: windows-latest
-
     steps:
     - uses: actions/checkout@v2
-    - name: update dependencies
+    - name: Update Rust
       run: rustup update
     - name: Build
       run: cargo build --release --verbose
-    - name: Run tests
+    - name: Run Tests
       run: cargo test --release --verbose
