@@ -1210,7 +1210,9 @@ impl Cpu
 
 
         let instruction = self.aux_read_pc(ram);
+
         println!("Instruction: 0x{:02X?}, Program Counter: 0x{:02X?}", instruction, &self.pc.reg);
+
         if instruction != 0xCB
         {
             match instruction
@@ -1631,7 +1633,9 @@ impl Cpu
         else
         {
             let cb_instruction = self.aux_read_immediate_data(ram);
+
             println!("Instruction: 0x{:02X?}, Program Counter: 0x{:02X?}", cb_instruction, self.pc.reg);
+
             match cb_instruction //CB Prefix
             {
                 0x00 => {self.rlc_r8(REG_B);},

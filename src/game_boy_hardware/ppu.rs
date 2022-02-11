@@ -5,6 +5,9 @@ const SCREEN_WIDTH:usize = 160;
 const SCREEN_HEIGHT:usize = 144;
 const SCREEN_WIDTH_U8:u8 = SCREEN_WIDTH as u8;
 const SCREEN_HEIGHT_U8:u8 = SCREEN_HEIGHT as u8;
+const CYCLES_PER_SCANLINE:u64 = 456;
+const VBLANK_LINES:u64 = 10;
+const CYCLES_PER_FRAME:u64 = CYCLES_PER_SCANLINE * (SCREEN_HEIGHT as u64 + VBLANK_LINES);
 
 const COLORS:[Color; 4] =
 [
@@ -90,17 +93,23 @@ impl Ppu
 
     pub fn execute(&mut self, ram: &mut Ram)
     {
+        let scan_line = (self.frame_progress / (CYCLES_PER_SCANLINE as u64)) as u8;
         //4 pixels per cycle
         for _ in 0..4
         {
-            self.pixel_update(ram);
+            self.pixel_update(ram, scan_line);
+        }
+
+        if self.new_frame
+        {
+            println!("Drawing screen");
+            self.draw_to_screen(ram);
+            self.new_frame = false;
         }
     }
 
-    fn pixel_update(&mut self, ram: &mut Ram)
+    fn pixel_update(&mut self, ram: &mut Ram, scan_line: u8)
     {
-        let scan_line = (self.frame_progress / 456) as u8;
-
         let lcd_on = ram.read(ram::LCDC) & LCDC_LCD_CONTROLLER_OPERATION_ON != 0;
         ram.write(ram::LY, scan_line);
         let status = ram.read(ram::STAT);
@@ -108,7 +117,7 @@ impl Ppu
         if lcd_on
         {
             let y_compare_match = ram.read(ram::LYC) == scan_line;
-            if (y_compare_match && status & 0x04 == 0 && status & 0x40 != 0) //If match, fresh match, and interrupt mode set to compare match, fire interrupt
+            if y_compare_match && status & 0x04 == 0 && status & 0x40 != 0 //If match, fresh match, and interrupt mode set to compare match, fire interrupt
             {
                 ram.write(ram::IF, ram.read(ram::IF) | ram::INTERRUPT_LCDC);
             }
@@ -116,6 +125,49 @@ impl Ppu
         }
 
         //Begin pixel write
+        //Mode 0: H-blank (92c), 1: vblank (), 2: vram in use, 3: vram transfer
+        let mode = status & 0b00000011;
+        if scan_line >= 144 //Handle V-blank
+        {
+            if mode != 1
+            {
+                ram.write(ram::IF, ram.read(ram::IF) | ram::INTERRUPT_VB);
+                //Set mode to 1
+                ram.write(ram::STAT, ram.read(ram::STAT) & 0b11111101);
+
+            }
+        }
+        else
+        {
+            let scan_progress = self.frame_progress % CYCLES_PER_SCANLINE;
+            match scan_progress
+            {
+                0..=91 if mode != 0 => //Mode 0
+                {
+                    //Set mode to 0
+                    ram.write(ram::STAT, ram.read(ram::STAT) & 0b11111100);
+                },
+                92..=251 if mode != 2 => //Mode 2
+                {
+                    //Set mode to 2
+                    ram.write(ram::STAT, ram.read(ram::STAT) & 0b11111110);
+                },
+                252..=455 if mode != 3 => //Mode 3
+                {
+                    //Set mode to 3
+                    ram.write(ram::STAT, ram.read(ram::STAT) & 0b11111111);
+                }
+                _ => {}
+            }
+        }
+
+        //Final progress update
+        let next_frame = (self.frame_progress + 1) % CYCLES_PER_FRAME;
+        if  next_frame < self.frame_progress
+        {
+            self.new_frame = true;
+        }
+        self.frame_progress = next_frame;
     }
 
     fn draw_to_screen(&mut self, ram: &mut Ram)
@@ -144,7 +196,7 @@ impl Ppu
             }
         }
         self.canvas.present();
-        
+
     }
 
     fn get_palette_addr(&self, ram: &Ram, idx: u8, y_coord: u8, lower_bank: bool)
