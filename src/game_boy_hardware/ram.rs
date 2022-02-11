@@ -19,12 +19,15 @@ pub const SCY:u16 = 0xFF42;
 pub const SCX:u16 = 0xFF43;
 pub const LY:u16 = 0xFF44;
 pub const LYC:u16 = 0xFF45;
+pub const DMA:u16 = 0xFF46;
 pub const BGP:u16 = 0xFF47;
 pub const OBP0:u16 = 0xFF48;
 pub const OBP1:u16 = 0xFF49;
 pub const WY:u16 = 0xFF4A;
 pub const WX:u16 = 0xFF4B;
-pub const OAM:RangeInclusive<u16> = 0xFE00..=0xFE9F;
+pub const OAM:RangeInclusive<u16> = 0xFE00..=0xFE9F; //OAM slot is 4 bytes, 0=Ycoord, 1=Xcoord, 2=TileIdx, 3=Attributes (b4=pallete, b5=Xflip, b6=Yflip, b7=priority)
+pub const VRAM1:RangeInclusive<u16> = 0x8000..=0x8FFF;
+pub const VRAM2:RangeInclusive<u16> = 0x8800..=0x97FF;
 
 //----Interrupt Registers----
 //Interrupt request
