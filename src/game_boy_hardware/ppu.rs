@@ -103,12 +103,13 @@ impl Ppu
         {
             self.pixel_update(ram, scan_line);
         }
+        let next_scan_line = (self.frame_progress / (CYCLES_PER_SCANLINE as u64)) as u8;
 
-        if self.new_frame
+        // println!("{}", scan_line);
+        if next_scan_line == 0 && scan_line != 0
         {
             println!("Drawing screen");
             self.draw_to_screen(ram);
-            self.new_frame = false;
         }
     }
 
@@ -196,12 +197,7 @@ impl Ppu
         }
 
         //Final progress update
-        let next_frame = (self.frame_progress + 1) % CYCLES_PER_FRAME;
-        if  next_frame < self.frame_progress
-        {
-            self.new_frame = true;
-        }
-        self.frame_progress = next_frame;
+        self.frame_progress = (self.frame_progress + 1) % CYCLES_PER_FRAME;
     }
 
     fn draw_pixel(&mut self, ram: &mut Ram, scan_line: u8, x_coord: u8)
@@ -250,7 +246,7 @@ impl Ppu
                         let mut tile_index = sprite.tile_index;
                         if sprite_height == 16
                         {
-                            tile_index &= 0xFE //???
+                            tile_index &= 0xFE; //???
                         }
 
                         let mut y_tile_px = scan_line + 16 - sprite.y_coord;

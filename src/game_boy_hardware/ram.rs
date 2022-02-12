@@ -50,7 +50,16 @@ pub const SC_BOOT_ROM_DISABLE:u16 = 0xFF50;
 pub struct Ram
 {
     mem: [u8;0x10000],
-    rom: Rom
+    rom: Rom,
+    dma: Dma
+}
+#[derive(Clone)]
+struct Dma
+{
+    delay_start: bool,
+    pending_source: u8,
+    source: u16,
+    active: bool
 }
 
 impl Ram
@@ -60,7 +69,8 @@ impl Ram
         Ram
         {
             mem: [0; 0x10000],
-            rom: rom
+            rom: rom,
+            dma: Dma { delay_start: false, pending_source: 0, source: 0, active: false }
         }
     }
 
@@ -70,6 +80,14 @@ impl Ram
         {
             //Boot rom disable
             SC_BOOT_ROM_DISABLE => {self.rom.boot_rom_enabled = false;},
+            DMA =>
+            {
+                if data < 0xF1
+                {
+                    self.dma.pending_source = data;
+                    self.dma.delay_start = true;
+                }
+            }
             _ => {}
         }
 
@@ -100,6 +118,35 @@ impl Ram
     pub fn read_rp(&self, msh: u8, lsh: u8) -> u8
     {
         self.read(u16::from_le_bytes([msh, lsh]))
+    }
+
+    pub fn execute(&mut self)
+    {
+        self.dma_update();
+    }
+
+    fn dma_update(&mut self)
+    {
+        if self.dma.pending_source != 0
+        {
+            if !self.dma.delay_start
+            {
+                self.dma.source = (self.dma.pending_source as u16) << 8;
+                self.dma.pending_source = 0;
+            }
+            self.dma.delay_start = false;
+        }
+
+        if self.dma.source != 0 && (self.dma.source & 0xFF) < 160
+        {
+            self.dma.active = true;
+            self.write(self.dma.source & 0xFF, self.read(self.dma.source));
+            self.dma.source += 1;
+        }
+        else
+        {
+            self.dma.active = false;    
+        }
     }
 
     //Interrupts

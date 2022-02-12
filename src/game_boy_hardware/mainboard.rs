@@ -37,7 +37,6 @@ impl Mainboard
 
     pub fn begin_execution(&mut self)
     {
-
         loop
         {
             if self.clock_enable
@@ -46,26 +45,26 @@ impl Mainboard
                 {
                     self.t_cycles += 1;
                 }
+                else //T-cycle-neg (4,194,304 hz)
+                {
+                
+                }
 
                 if self.cycles % 8 == 0 //M-cycle-pos (1,048,576 hz)
                 {
                     self.cpu.execute(&mut self.ram);
+                    self.ram.execute();
                     self.ppu.execute(&mut self.ram);
 
                     self.m_cycles += 1;
                 }
-
-                if self.cycles % 8 == 1 //M-cycle-neg (1,048,576 hz)
+                else //M-cycle-neg (1,048,576 hz)
                 {
                     self.timer.execute(&mut self.ram, self.m_cycles);
                 }
 
-                if self.cycles % 2 == 1 //T-cycle-neg (4,194,304 hz)
-                {
-
-                }
+                
             }
-            thread::sleep(self.clock);
         }
     }
 }
