@@ -53,17 +53,26 @@ impl Mainboard
                 if self.cycles % 8 == 0 //M-cycle-pos (1,048,576 hz)
                 {
                     self.cpu.execute(&mut self.ram);
-                    self.ram.execute();
+                    if !self.cpu.halted
+                    {
+                        self.ram.execute();
+                    }
                     self.ppu.execute(&mut self.ram);
 
                     self.m_cycles += 1;
                 }
                 else //M-cycle-neg (1,048,576 hz)
                 {
-                    self.timer.execute(&mut self.ram, self.m_cycles);
+                    if !self.cpu.halted
+                    {   
+                        self.timer.execute(&mut self.ram, self.m_cycles);
+                    }
                 }
 
-                
+                if self.cpu.stopped
+                {
+                    self.clock_enable = false;
+                }
             }
         }
     }

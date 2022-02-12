@@ -39,6 +39,10 @@ impl Rom
             bytes: bytes,
             boot_rom_enabled: true
         };
+        if rom.bytes[0x149] != 0
+        {
+            println!("ROM uses unsupported external ram");
+        }
         return rom;
     }
 

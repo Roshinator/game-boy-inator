@@ -66,12 +66,14 @@ impl Ram
 {
     pub fn new(rom: Rom) -> Ram
     {
-        Ram
+        let mut ram = Ram
         {
             mem: [0; 0x10000],
             rom: rom,
             dma: Dma { delay_start: false, pending_source: 0, source: 0, active: false }
-        }
+        };
+        ram.mem[0x0000..=0x3FFF].copy_from_slice(&ram.rom.bytes[0x0000..=0x3FFF]);
+        return ram;
     }
 
     pub fn write(&mut self, address: u16, data: u8)

@@ -68,7 +68,9 @@ pub struct Cpu
     regs: [u8;8],
     sp: u16,
     pc: ProgramCounter,
-    ime: bool
+    ime: bool,
+    pub halted: bool,
+    pub stopped: bool
 }
 
 impl Cpu
@@ -83,7 +85,9 @@ impl Cpu
             {
                 reg: 0, should_increment: true, current_instruction_width: 1, current_instruction_cycles: 0
             },
-            ime: false
+            ime: false,
+            halted: false,
+            stopped: false
         }
     }
     //Format [name]_[param1]_[param2]
@@ -103,6 +107,17 @@ impl Cpu
         let x = data as u8;
         assert!(x == 0 || x == 1);
         self.regs[REG_F] = self.regs[REG_F].to_le() & u8::to_le(!(!x << param))
+    }
+
+    fn halt(&mut self)
+    {
+        self.halted = true;
+    }
+
+    fn stop(&mut self)
+    {
+        self.halted = true;
+        self.stopped = true;
     }
 
     fn ld_r16_16(&mut self, msh_reg: Reg, lsh_reg: Reg, msh_num: u8, lsh_num: u8)
@@ -1149,6 +1164,7 @@ impl Cpu
         if self.pc.should_increment
         {
             self.pc.reg += 1;
+            self.pc.current_instruction_width = 0;
         }
         else
         {
@@ -1177,9 +1193,9 @@ impl Cpu
         }
 
         //Fetch
+        let valid_interrupts = ram.read(ram::IF) & ram.read(ram::IE);
         if self.ime
         {
-            let valid_interrupts = ram.read(ram::IF) & ram.read(ram::IE);
             if valid_interrupts != 0
             {
                 self.ime = false;
@@ -1208,6 +1224,17 @@ impl Cpu
 
         }
 
+        if self.halted
+        {
+            if valid_interrupts != 0
+            {
+                self.halted = false;
+            }
+            else
+            {
+                return;
+            }
+        }
 
         let instruction = self.aux_read_pc(ram);
 
@@ -1247,7 +1274,7 @@ impl Cpu
                     self.ld_r8_8(REG_C, num);
                 },
                 0x0F => {self.rrca();},
-                0x10 => {},
+                0x10 => {self.stop();},
                 0x11 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
@@ -1406,7 +1433,7 @@ impl Cpu
                 0x73 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_E);},
                 0x74 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_H);},
                 0x75 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_L);},
-                0x76 => {},
+                0x76 => {self.halt();},
                 0x77 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_A);},
                 0x78 => {self.ld_r8_r8(REG_A, REG_B);},
                 0x79 => {self.ld_r8_r8(REG_A, REG_C);},
