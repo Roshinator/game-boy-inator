@@ -105,7 +105,7 @@ impl Ram
     {
         match address
         {
-            0x0000..=0x0100 =>
+            0x0000..=0x00FF =>
             {
                 if self.rom.boot_rom_enabled
                 {

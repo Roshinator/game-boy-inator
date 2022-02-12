@@ -3,18 +3,11 @@ name = "game-boy-inator"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-name = "game_boy_hardware"
-path = "src/game_boy_hardware/lib.rs"
-
 [[bin]]
 name = "game-boy-inator"
 path = "src/main.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies.sdl2]
-version = "0.35"
-features = ["bundled",
-        #"static-link"
-    ]
+[dependencies.game-boy-hardware]
+path = "game-boy-hardware"
+version = "*"
+features = ["cpu-debug"]

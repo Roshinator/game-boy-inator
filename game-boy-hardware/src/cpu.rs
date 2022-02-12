@@ -1238,7 +1238,8 @@ impl Cpu
 
         let instruction = self.aux_read_pc(ram);
 
-        // println!("Instruction: 0x{:02X?}, Program Counter: 0x{:02X?}", instruction, &self.pc.reg);
+        #[cfg(feature = "cpu-debug")]
+        println!("Instruction: 0x{:02X?}, Program Counter: 0x{:02X?}", instruction, &self.pc.reg);
 
         if instruction != 0xCB
         {
