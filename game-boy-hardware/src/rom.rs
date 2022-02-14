@@ -28,7 +28,6 @@ pub enum MBCModel {MbcNone, Mbc1_16_8, Mbc2, Mbc3, Mbc5}
 pub struct Rom
 {
     pub bytes: Vec<u8>,
-    pub boot_rom_enabled: bool,
     pub mbc_model: MBCModel,
     pub rom_size: usize,
     pub ram_size: usize,
@@ -48,7 +47,6 @@ impl Rom
         let mut rom = Rom
         {
             bytes: bytes,
-            boot_rom_enabled: true,
             mbc_model: MBCModel::MbcNone,
             rom_size: 0,
             ram_size: 0,

@@ -1,13 +1,11 @@
 use sdl2::{render::*, video::*, EventPump, event::*, keyboard::*, pixels::*, rect::*};
 use super::ram::{self, Ram};
 
-const SCREEN_WIDTH:usize = 160;
-const SCREEN_HEIGHT:usize = 144;
-const SCREEN_WIDTH_U8:u8 = SCREEN_WIDTH as u8;
-const SCREEN_HEIGHT_U8:u8 = SCREEN_HEIGHT as u8;
+pub const SCREEN_WIDTH:usize = 160;
+pub const SCREEN_HEIGHT:usize = 144;
 const CYCLES_PER_SCANLINE:u64 = 456;
 const VBLANK_LINES:u64 = 10;
-const CYCLES_PER_FRAME:u64 = CYCLES_PER_SCANLINE * (SCREEN_HEIGHT as u64 + VBLANK_LINES);
+pub const CYCLES_PER_FRAME:u64 = CYCLES_PER_SCANLINE * (SCREEN_HEIGHT as u64 + VBLANK_LINES);
 
 const COLORS:[Color; 4] =
 [
@@ -345,7 +343,7 @@ impl Ppu
                 priority: attributes & OBJ_ATTRIBUTE_PRIORITY == 0
             };
 
-            if sprite.y_coord > 0 && sprite.y_coord < 160 && sprite.x_coord < SCREEN_WIDTH_U8 + 8 //On screen
+            if sprite.y_coord > 0 && sprite.y_coord < 160 && sprite.x_coord < (SCREEN_WIDTH as u8) + 8 //On screen
                 && scan_num + 16 >= sprite.y_coord && scan_num + 16 < sprite.y_coord + sprite_height //In Scanline
             {
                 let mut priority = sprites.len();

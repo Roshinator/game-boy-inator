@@ -1,6 +1,6 @@
 use std::{time::Duration, thread, fs::*, io::Read};
 
-use super::{cpu::Cpu, ram::Ram, rom::Rom, timer::Timer, ppu::Ppu};
+use super::{cpu::Cpu, ram::Ram, rom::Rom, timer::Timer, ppu::{self, Ppu}};
 
 pub const CLOCK_EDGE:f64 = 8_338_608_f64;
 
@@ -19,12 +19,12 @@ pub struct Mainboard
 
 impl Mainboard
 {
-    pub fn new(rom: File) -> Mainboard
+    pub fn new() -> Mainboard
     {
         Mainboard
         {
             cpu: Cpu::new(),
-            ram: Ram::new(Rom::new(rom)),
+            ram: Ram::new(),
             ppu: Ppu::new(),
             timer: Timer::new(),
             clock: Duration::from_secs_f64(1_f64 / CLOCK_EDGE),
@@ -35,9 +35,23 @@ impl Mainboard
         }
     }
 
-    pub fn begin_execution(&mut self)
+    pub fn load_game(&mut self, path: &std::path::Path) -> Result<(), ()>
     {
-        loop
+        let file_result = std::fs::File::open(path);
+        match file_result
+        {
+            Ok(f) =>
+            {
+                self.ram.load_rom(&Rom::new(f));
+                Ok(())
+            },
+            Err(..) => Err(())
+        }
+    }
+
+    pub fn execute_frame(&mut self)
+    {
+        for _ in 0..ppu::CYCLES_PER_FRAME
         {
             if self.clock_enable
             {

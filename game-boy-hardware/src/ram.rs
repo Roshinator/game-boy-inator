@@ -50,8 +50,8 @@ pub const SC_BOOT_ROM_DISABLE:u16 = 0xFF50;
 pub struct Ram
 {
     mem: [u8;0x10000],
-    rom: Rom,
-    dma: Dma
+    boot_rom_enabled: bool,
+    dma: Dma,
 }
 #[derive(Clone)]
 struct Dma
@@ -64,16 +64,20 @@ struct Dma
 
 impl Ram
 {
-    pub fn new(rom: Rom) -> Ram
+    pub fn new() -> Ram
     {
-        let mut ram = Ram
+        let ram = Ram
         {
             mem: [0; 0x10000],
-            rom: rom,
+            boot_rom_enabled: true,
             dma: Dma { delay_start: false, pending_source: 0, source: 0, active: false }
         };
-        ram.mem[0x0000..=0x3FFF].copy_from_slice(&ram.rom.bytes[0x0000..=0x3FFF]);
         return ram;
+    }
+
+    pub fn load_rom(&mut self, rom: &Rom)
+    {
+        self.mem[0x0000..=0x3FFF].copy_from_slice(&rom.bytes[0x0000..=0x3FFF]);
     }
 
     pub fn write(&mut self, address: u16, data: u8)
@@ -81,7 +85,7 @@ impl Ram
         match address
         {
             //Boot rom disable
-            SC_BOOT_ROM_DISABLE => {self.rom.boot_rom_enabled = false;},
+            SC_BOOT_ROM_DISABLE => {self.boot_rom_enabled = false;},
             DMA =>
             {
                 if data < 0xF1
@@ -107,7 +111,7 @@ impl Ram
         {
             0x0000..=0x00FF =>
             {
-                if self.rom.boot_rom_enabled
+                if self.boot_rom_enabled
                 {
                     return rom::BOOT_ROM[address as usize];
                 }
