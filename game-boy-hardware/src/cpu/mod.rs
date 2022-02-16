@@ -1,4 +1,6 @@
-use super::ram::{self, Ram};
+mod tests;
+
+use crate::ram::{self, Ram};
 
 type Reg = usize;
 const REG_A:Reg = 0;
