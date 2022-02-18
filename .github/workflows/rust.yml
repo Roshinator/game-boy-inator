@@ -19,7 +19,7 @@ jobs:
     - name: Build
       run: cargo build --release --verbose
     - name: Run Tests
-      run: cargo test --release --verbose
+      run: cargo test -p game-boy-inator -p game-boy-hardware --release --verbose
 
   build-mac:
     runs-on: macos-latest
@@ -30,7 +30,7 @@ jobs:
     - name: Build
       run: cargo build --release --verbose
     - name: Run Tests
-      run: cargo test --release --verbose
+      run: cargo test -p game-boy-inator -p game-boy-hardware --release --verbose
 
   build-windows:
     runs-on: windows-latest
@@ -41,4 +41,4 @@ jobs:
     - name: Build
       run: cargo build --release --verbose
     - name: Run Tests
-      run: cargo test --release --verbose
+      run: cargo test -p game-boy-inator -p game-boy-hardware --release --verbose
