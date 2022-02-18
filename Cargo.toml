@@ -11,3 +11,9 @@ path = "src/main.rs"
 path = "game-boy-hardware"
 version = "*"
 features = ["cpu-debug"]
+
+[dependencies.sdl2]
+version = "0.35"
+features = ["bundled",
+        #"static-link"
+    ]

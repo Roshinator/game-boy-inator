@@ -1,6 +1,6 @@
-use std::{time::Duration, thread, fs::*, io::Read};
+use std::{cell::{RefCell, Ref}, rc::Rc};
 
-use super::{cpu::Cpu, ram::Ram, rom::Rom, timer::Timer, ppu::{self, Ppu}};
+use crate::{cpu::Cpu, ram::Ram, rom::Rom, timer::Timer, ppu::{self, Ppu}};
 
 pub const CLOCK_EDGE:f64 = 8_338_608_f64;
 
@@ -10,16 +10,16 @@ pub struct Mainboard
     ram: Ram,
     ppu: Ppu,
     timer: Timer,
-    clock: Duration,
     clock_enable: bool,
     cycles: u64,
     t_cycles: u64,
-    m_cycles: u64
+    m_cycles: u64,
+    hardware_handle: crate::HardwareHandle
 }
 
 impl Mainboard
 {
-    pub fn new() -> Mainboard
+    pub fn new<T: crate::Frontend + 'static>(hardware_handle: T) -> Mainboard
     {
         Mainboard
         {
@@ -27,15 +27,15 @@ impl Mainboard
             ram: Ram::new(),
             ppu: Ppu::new(),
             timer: Timer::new(),
-            clock: Duration::from_secs_f64(1_f64 / CLOCK_EDGE),
             clock_enable: true,
             cycles: 0,
             t_cycles: 0,
-            m_cycles: 0
+            m_cycles: 0,
+            hardware_handle: Rc::new(RefCell::new(hardware_handle))
         }
     }
 
-    pub fn load_game(&mut self, path: &std::path::Path) -> Result<(), ()>
+    pub fn load_game(&mut self, path: &std::path::Path) -> Result<(), std::io::Error>
     {
         let file_result = std::fs::File::open(path);
         match file_result
@@ -45,7 +45,7 @@ impl Mainboard
                 self.ram.load_rom(&Rom::new(f));
                 Ok(())
             },
-            Err(..) => Err(())
+            Err(x) => Err(x)
         }
     }
 
@@ -61,7 +61,7 @@ impl Mainboard
                 }
                 else //T-cycle-neg (4,194,304 hz)
                 {
-                
+
                 }
 
                 if self.cycles % 8 == 0 //M-cycle-pos (1,048,576 hz)
@@ -71,14 +71,14 @@ impl Mainboard
                     {
                         self.ram.execute();
                     }
-                    self.ppu.execute(&mut self.ram);
+                    self.ppu.execute(&mut self.ram, Rc::clone(&self.hardware_handle));
 
                     self.m_cycles += 1;
                 }
                 else //M-cycle-neg (1,048,576 hz)
                 {
                     if !self.cpu.halted
-                    {   
+                    {
                         self.timer.execute(&mut self.ram, self.m_cycles);
                     }
                 }
@@ -89,5 +89,6 @@ impl Mainboard
                 }
             }
         }
+        &self.hardware_handle.borrow_mut().event_poll();
     }
 }

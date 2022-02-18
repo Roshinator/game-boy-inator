@@ -1,6 +1,6 @@
 use std::ops::{RangeInclusive};
 
-use super::{rom::{self, Rom}};
+use crate::{rom::{self, Rom}};
 
 //----Timer Registers----
 //DIV: Divider
@@ -151,7 +151,7 @@ impl Ram
         }
         else
         {
-            self.dma.active = false;    
+            self.dma.active = false;
         }
     }
 

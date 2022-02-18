@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests
 {
-    use super::super::{ram::Ram, cpu::Cpu};
+    use crate::{ram::Ram, cpu::Cpu};
 
     #[test]
     fn ram_write()

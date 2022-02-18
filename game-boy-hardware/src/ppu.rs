@@ -1,19 +1,10 @@
-use sdl2::{render::*, video::*, EventPump, event::*, keyboard::*, pixels::*, rect::*};
-use super::ram::{self, Ram};
+use crate::ram::{self, Ram};
 
 pub const SCREEN_WIDTH:usize = 160;
 pub const SCREEN_HEIGHT:usize = 144;
 const CYCLES_PER_SCANLINE:u64 = 456;
 const VBLANK_LINES:u64 = 10;
 pub const CYCLES_PER_FRAME:u64 = CYCLES_PER_SCANLINE * (SCREEN_HEIGHT as u64 + VBLANK_LINES);
-
-const COLORS:[Color; 4] =
-[
-    Color::RGB(0xFF, 0xFF, 0xFF),
-    Color::RGB(0xAA, 0xAA, 0xAA),
-    Color::RGB(0x55, 0x55, 0x55),
-    Color::RGB(0x00, 0x00, 0x00),
-];
 
 const LCDC_BG_ENABLE:u8 = 1 << 0;
 const LCDC_OBJ_ON:u8 = 1 << 1;
@@ -54,8 +45,6 @@ pub struct Sprite
 }
 pub struct Ppu
 {
-    canvas: Canvas<Window>,
-    event_pump: EventPump,
     frame_progress:u64,
     buffer: [[u8;SCREEN_HEIGHT];SCREEN_WIDTH],
     new_frame: bool,
@@ -67,24 +56,8 @@ impl Ppu
 {
     pub fn new() -> Ppu
     {
-        let sdl_context = sdl2::init().unwrap();
-        let video_subsystem = sdl_context.video().unwrap();
-
-        let window = video_subsystem.window("Game Boy Inator", 810, 730)
-            .position_centered()
-            .resizable()
-            .build()
-            .unwrap();
-
-        let mut canvas = window.into_canvas().accelerated().build().unwrap();
-        canvas.set_logical_size(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
-        canvas.set_integer_scale(true).unwrap();
-        let event_pump = sdl_context.event_pump().unwrap();
-
         Ppu
         {
-            canvas: canvas,
-            event_pump: event_pump,
             frame_progress: 0,
             buffer: [[0; SCREEN_HEIGHT]; SCREEN_WIDTH],
             new_frame: false,
@@ -93,7 +66,7 @@ impl Ppu
         }
     }
 
-    pub fn execute(&mut self, ram: &mut Ram)
+    pub fn execute(&mut self, ram: &mut Ram, hardware_handle: crate::HardwareHandle)
     {
         let scan_line = (self.frame_progress / (CYCLES_PER_SCANLINE as u64)) as u8;
         //4 pixels per cycle
@@ -107,7 +80,7 @@ impl Ppu
         if next_scan_line == 0 && scan_line != 0
         {
             println!("Drawing screen");
-            self.draw_to_screen(ram);
+            hardware_handle.borrow_mut().video_update(&self.buffer);
         }
     }
 
@@ -360,34 +333,5 @@ impl Ppu
 
         }
         return sprites;
-    }
-
-    fn draw_to_screen(&mut self, ram: &mut Ram)
-    {
-        for event in self.event_pump.poll_iter()
-        {
-            match event
-            {
-                Event::Quit {..} |
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } =>
-                {
-                    std::process::exit(0);
-                },
-                _ => {}
-            }
-        }
-
-        self.canvas.set_draw_color(Color::BLACK);
-        self.canvas.clear();
-        for x_coord in 0..SCREEN_WIDTH
-        {
-            for y_coord in 0..SCREEN_HEIGHT
-            {
-                self.canvas.set_draw_color(COLORS[self.buffer[x_coord][y_coord] as usize]);
-                self.canvas.draw_point(Point::new(x_coord as i32, y_coord as i32)).unwrap();
-            }
-        }
-        self.canvas.present();
-
     }
 }

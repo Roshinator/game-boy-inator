@@ -1,6 +1,4 @@
-use sdl2::timer::TimerCallback;
-
-use super::{mainboard::*, ram::{self, Ram}};
+use crate::ram::{self, Ram};
 
 //TIMER USES A T-CYCLE-NEG
 
@@ -40,7 +38,7 @@ impl Timer
         let old_timer_enable = self.tima_enabled;
         self.tima_enabled = tac_val & (1 << 2) != 0;
         let timer_clock = INPUT_CLOCK_SELECT_CYCLE_COUNT[(tac_val & 0b00000011_u8) as usize];
-        
+
         //TIMA overflow timing may be incorrect
         if self.tima_overflow
         {
@@ -62,7 +60,7 @@ impl Timer
             }
         }
 
-        
+
     }
 
     fn timer_increment(&mut self, ram: &mut Ram) -> bool

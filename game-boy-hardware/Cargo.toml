@@ -12,9 +12,3 @@ cpu-debug = []
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies.sdl2]
-version = "0.35"
-features = ["bundled",
-        #"static-link"
-    ]
