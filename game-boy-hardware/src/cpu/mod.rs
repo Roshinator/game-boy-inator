@@ -101,14 +101,19 @@ impl Cpu
 
     fn aux_read_flag(&self, param: Flag) -> bool
     {
-        (self.regs[REG_F].to_le() & u8::to_le(1 << param)) > 0
+        (self.regs[REG_F] & 1 << param) != 0
     }
 
     fn aux_write_flag(&mut self, param: Flag, data: bool)
     {
-        let x = data as u8;
-        assert!(x == 0 || x == 1);
-        self.regs[REG_F] = self.regs[REG_F].to_le() & u8::to_le(!(!x << param))
+        if data
+        {
+            self.regs[REG_F] = self.regs[REG_F] | (1 << param);
+        }
+        else
+        {
+            self.regs[REG_F] = self.regs[REG_F] & (!(1 << param));
+        }
     }
 
     fn halt(&mut self)
