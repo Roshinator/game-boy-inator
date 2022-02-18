@@ -62,7 +62,7 @@ mod tests
         assert_eq!(cpu.regs[REG_L], 0x00);
         cpu.ld_hl_sp_plus(-1);
         assert_eq!(cpu.regs[REG_H], 0x11);
-        assert_eq!(cpu.regs[REG_L], 0xFF);
+        assert_eq!(cpu.regs[REG_L], 0xFE);
         //CHECK CARRY FLAGS
     }
 }
