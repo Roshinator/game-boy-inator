@@ -102,7 +102,7 @@ impl Ram
 
     pub fn write_rp(&mut self, msh: u8, lsh: u8, data: u8)
     {
-        self.write(u16::from_le_bytes([msh, lsh]), data);
+        self.write(u16::from_le_bytes([lsh, msh]), data);
     }
 
     pub fn read(&self, address: u16) -> u8
@@ -123,7 +123,7 @@ impl Ram
 
     pub fn read_rp(&self, msh: u8, lsh: u8) -> u8
     {
-        self.read(u16::from_le_bytes([msh, lsh]))
+        self.read(u16::from_le_bytes([lsh, msh]))
     }
 
     pub fn execute(&mut self)

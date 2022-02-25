@@ -1,4 +1,6 @@
-mod tests;
+mod ld_tests;
+mod control_tests;
+mod alu_tests;
 
 use crate::ram::{self, Ram};
 
@@ -209,6 +211,7 @@ impl Cpu
 
     // TODO: See if the flags are modified
 
+    ///Returns (lsh, msh)
     fn aux_inc_16(&mut self, msh: u8, lsh: u8) -> (u8, u8)
     {
         let lsh_result = u8::overflowing_add(lsh, 1);
@@ -1298,7 +1301,7 @@ impl Cpu
                 },
                 0x17 => {self.rla();},
                 0x18 => {
-                    let immediate = i8::from_le_bytes(self.aux_read_immediate_data(ram).to_le_bytes());
+                    let immediate = self.aux_read_immediate_data(ram) as i8;
                     self.jr_i8(immediate);
                 },
                 0x19 => {self.add_r16_r16(REG_H, REG_L, REG_D, REG_E);},
@@ -1312,7 +1315,7 @@ impl Cpu
                 },
                 0x1F => {self.rra();},
                 0x20 => {
-                    let immediate = i8::from_le_bytes(self.aux_read_immediate_data(ram).to_le_bytes());
+                    let immediate = self.aux_read_immediate_data(ram) as i8;
                     self.jr_nflag_i8(FLAG_Z, immediate);
                 },
                 0x21 => {
@@ -1333,7 +1336,7 @@ impl Cpu
                 },
                 0x27 => {self.daa();},
                 0x28 => {
-                    let immediate = i8::from_le_bytes(self.aux_read_immediate_data(ram).to_le_bytes());
+                    let immediate = self.aux_read_immediate_data(ram) as i8;
                     self.jr_flag_i8(FLAG_Z, immediate);
                 },
                 0x29 => {self.add_r16_r16(REG_H, REG_L, REG_H, REG_L)},
@@ -1350,7 +1353,7 @@ impl Cpu
                 },
                 0x2F => {self.cpl();},
                 0x30 => {
-                    let immediate = i8::from_le_bytes(self.aux_read_immediate_data(ram).to_le_bytes());
+                    let immediate = self.aux_read_immediate_data(ram) as i8;
                     self.jr_nflag_i8(FLAG_C, immediate);
                 },
                 0x31 => {
@@ -1371,7 +1374,7 @@ impl Cpu
                 },
                 0x37 => {self.scf();},
                 0x38 => {
-                    let immediate = i8::from_le_bytes(self.aux_read_immediate_data(ram).to_le_bytes());
+                    let immediate = self.aux_read_immediate_data(ram) as i8;
                     self.jr_flag_i8(FLAG_C, immediate);
                 },
                 0x39 => {self.add_r16_sp(REG_H, REG_L);},
@@ -1612,7 +1615,7 @@ impl Cpu
                 },
                 0xE7 => {self.rst(ram, 0x20);},
                 0xE8 => {
-                    let immediate = i8::from_le_bytes(self.aux_read_immediate_data(ram).to_le_bytes());
+                    let immediate = self.aux_read_immediate_data(ram) as i8;
                     self.add_sp_i8(immediate);
                 },
                 0xE9 => {self.jp_pc_16(self.regs[REG_H], self.regs[REG_L]);},
@@ -1644,7 +1647,7 @@ impl Cpu
                 },
                 0xF7 => {self.rst(ram, 0x30);},
                 0xF8 => {
-                    let immediate = i8::from_le_bytes(self.aux_read_immediate_data(ram).to_le_bytes());
+                    let immediate = self.aux_read_immediate_data(ram) as i8;
                     self.ld_hl_sp_plus(immediate);
                 },
                 0xF9 => {self.ld_sp_r16( REG_H, REG_L);},
