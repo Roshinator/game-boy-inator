@@ -1,7 +1,7 @@
 mod ld_tests;
 mod control_tests;
 mod alu_tests;
-
+mod jump_branch_tests;
 use crate::ram::{self, Ram};
 
 type Reg = usize;
@@ -815,11 +815,7 @@ impl Cpu
     {
         if self.aux_read_flag(flag) == true
         {
-            let pc_bytes = self.pc.reg.to_le_bytes();
-            ram.write(self.sp - 1, pc_bytes[1]);
-            ram.write(self.sp - 2, pc_bytes[0]);
-            self.pc.reg = u16::from_le_bytes([lsh, msh]);
-            self.sp -= 2;
+            self.call_16(ram, msh, lsh);
         }
     }
 
@@ -827,11 +823,7 @@ impl Cpu
     {
         if self.aux_read_flag(flag) == false
         {
-            let pc_bytes = self.pc.reg.to_le_bytes();
-            ram.write(self.sp - 1, pc_bytes[1]);
-            ram.write(self.sp - 2, pc_bytes[0]);
-            self.pc.reg = u16::from_le_bytes([lsh, msh]);
-            self.sp -= 2;
+            self.call_16(ram, msh, lsh);
         }
     }
 
