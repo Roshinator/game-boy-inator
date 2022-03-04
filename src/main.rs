@@ -1,20 +1,29 @@
-use std::path;
+use std::path::{Path, PathBuf};
+use rfd::FileDialog;
 use sdl2::{render::*, video::*, EventPump, event::*, keyboard::*, pixels::*, rect::*};
 use game_boy_hardware::{mainboard::Mainboard, ppu};
-
 
 fn main()
 {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2
+    let filename = if args.len() < 2
     {
-        println!("No file specified.");
-        std::process::exit(1);
+        let dialog = FileDialog::new()
+            .set_directory(&std::env::current_dir().unwrap())
+            .add_filter("Game Boy Roms", &["gb"]);
+        match dialog.pick_file()
+        {
+            Some(path) => path,
+            None => panic!("Bad file path")
+        }
     }
-    let filename = &args[1];
+    else
+    {
+        PathBuf::from(&args[1])
+    };
     let frontend = PCHardware::new();
     let mut motherboard = Mainboard::new(frontend);
-    motherboard.load_game(path::Path::new(filename)).unwrap();
+    motherboard.load_game(Path::new(filename.as_path())).unwrap();
 
     loop
     {

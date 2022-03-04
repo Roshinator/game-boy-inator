@@ -41,7 +41,6 @@ impl Rom
 {
     pub fn new(mut f: File) -> Rom
     {
-
         let mut bytes = Vec::new();
         let _result = f.read_to_end(&mut bytes);
         let mut rom = Rom

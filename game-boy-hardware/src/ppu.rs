@@ -306,7 +306,7 @@ impl Ppu
         for oam_slot in (ram::OAM).step_by(4)
         {
             let attributes = ram.read(oam_slot + OBJ_ATTRIBUTE_OFFSET);
-            let mut sprite = Sprite
+            let sprite = Sprite
             {
                 y_coord: ram.read(oam_slot + OBJ_LCD_Y_RAM_OFFSET),
                 x_coord: ram.read(oam_slot + OBJ_LCD_X_RAM_OFFSET),
