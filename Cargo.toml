@@ -23,4 +23,4 @@ features = ["bundled",
 
 [dependencies]
 sdl2-sys = "=0.35.1"
-rfd = "0.8"
+native-dialog = "0.6"
