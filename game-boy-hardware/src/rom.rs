@@ -21,7 +21,7 @@ pub const BOOT_ROM:[u8;256] =
     0xF5,0x06,0x19,0x78,0x86,0x23,0x05,0x20,0xFB,0x86,0x20,0xFE,0x3E,0x01,0xE0,0x50
 ];
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum MBCModel {MbcNone, Mbc1_16_8, Mbc2, Mbc3, Mbc5}
 
 #[derive(Clone)]
@@ -32,7 +32,7 @@ pub struct Rom
     pub rom_size: usize,
     pub ram_size: usize,
     pub has_battery: bool,
-    pub has_RTC: bool,
+    pub has_rtc: bool,
     pub has_rumble: bool,
     pub title: String
 }
@@ -51,22 +51,28 @@ impl Rom
             rom_size: 0,
             ram_size: 0,
             has_battery: false,
-            has_RTC: false,
+            has_rtc: false,
             has_rumble: false,
             title: Default::default()
         };
 
-        let mut title:Vec<u8> = Vec::<u8>::new();
+        let mut ttl:Vec<u8> = Vec::<u8>::new();
         for i in 0..16
         {
             let x = rom.bytes[0x134 + i];
             if x <= 127
             {
-                title.push(x);
+                if !x.is_ascii_control()
+                {
+                    ttl.push(x);
+                }
             }
         }
-        rom.title = String::from_utf8(title).unwrap();
-        println!("Title: {}", rom.title);
+        rom.title = match String::from_utf8(ttl)
+        {
+            Ok(res) => res,
+            Err(_) => String::from("Unknown")
+        };
 
         rom.mbc_model = match rom.bytes[0x147]
         {
@@ -76,7 +82,7 @@ impl Rom
             0x05 => MBCModel::Mbc2,
             0x06 => {rom.has_battery = true; MBCModel::Mbc2},
             0x09 => {rom.has_battery = true; MBCModel::MbcNone},
-            0x0F | 0x10 => {rom.has_battery = true; rom.has_RTC = true; MBCModel::Mbc3},
+            0x0F | 0x10 => {rom.has_battery = true; rom.has_rtc = true; MBCModel::Mbc3},
             0x11 | 0x12 => {MBCModel::Mbc3},
             0x13 => {rom.has_battery = true; MBCModel::Mbc3},
             0x19 | 0x1A => MBCModel::Mbc5,
@@ -100,7 +106,7 @@ impl Rom
             0x54 => 1572864, /* 12 Mbit */
             _ => panic!("Invalid rom size")
         };
-        
+
         rom.ram_size = match rom.bytes[0x149] //Values are address count (*8 for size)
         {
             _ if rom.mbc_model == MBCModel::Mbc2 => 512,
@@ -113,8 +119,17 @@ impl Rom
         };
 
         //Check checksum here
+
+        //Print ROM details
+        println!("{:?}", rom);
         return rom;
     }
+}
 
-
+impl std::fmt::Debug for Rom
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        f.debug_struct("Rom").field("mbc_model", &self.mbc_model).field("rom_size", &self.rom_size).field("ram_size", &self.ram_size).field("has_battery", &self.has_battery).field("has_rtc", &self.has_rtc).field("has_rumble", &self.has_rumble).field("title", &self.title).finish()
+    }
 }

@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [features]
 cpu-debug = []
+ppu-debug = []
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

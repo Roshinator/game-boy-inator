@@ -79,6 +79,7 @@ impl Ppu
         // println!("{}", scan_line);
         if next_scan_line == 0 && scan_line != 0
         {
+            #[cfg(feature = "ppu-debug")]
             println!("Drawing screen");
             hardware_handle.borrow_mut().video_update(&self.buffer);
         }

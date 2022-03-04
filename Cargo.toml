@@ -10,7 +10,10 @@ path = "src/main.rs"
 [dependencies.game-boy-hardware]
 path = "game-boy-hardware"
 version = "*"
-features = ["cpu-debug"]
+features = [
+    # "cpu-debug",
+    # "ppu-debug"
+    ]
 
 [dependencies.sdl2]
 version = "=0.35.1"
