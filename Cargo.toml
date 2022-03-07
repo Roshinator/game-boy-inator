@@ -1,7 +1,11 @@
 [package]
 name = "game-boy-inator"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
+license = "MIT"
+description = "A game boy emulator core as a library"
+repository = "https://github.com/Roshinator/game-boy-inator"
+readme = "README.md"
 
 [lib]
 name = "gbi"
