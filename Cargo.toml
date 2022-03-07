@@ -23,7 +23,3 @@ features = ["bundled",
 
 [dependencies]
 sdl2-sys = "=0.35.1"
-
-[dependencies.native-dialog]
-version = "0.6"
-features = ["windows_dpi_awareness"]

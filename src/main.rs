@@ -1,27 +1,11 @@
 use std::path::{Path, PathBuf};
-use native_dialog::FileDialog;
 use sdl2::{render::*, video::*, EventPump, event::*, keyboard::*, pixels::*, rect::*};
 use game_boy_hardware::{mainboard::Mainboard, ppu};
 
 fn main()
 {
     let args: Vec<String> = std::env::args().collect();
-    let filename = if args.len() < 2
-    {
-        let current_env = std::env::current_dir().unwrap();
-        let dialog = FileDialog::new()
-            .set_location(&current_env)
-            .add_filter("Game Boy Roms", &["gb"]);
-        match dialog.show_open_single_file().unwrap()
-        {
-            Some(path) => path,
-            None => panic!("Bad file path")
-        }
-    }
-    else
-    {
-        PathBuf::from(&args[1])
-    };
+    let filename = PathBuf::from(&args[1]);
     let frontend = PCHardware::new();
     let mut motherboard = Mainboard::new(frontend);
     motherboard.load_game(Path::new(filename.as_path())).unwrap();
@@ -53,12 +37,11 @@ impl PCHardware
         let sdl_context = sdl2::init().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
 
-        let window = video_subsystem.window("Game Boy Inator", 810, 730)
+        let mut window = video_subsystem.window("Game Boy Inator", 810, 730)
             .position_centered()
             .resizable()
             .build()
             .unwrap();
-
         let mut canvas = window.into_canvas().accelerated().build().unwrap();
         canvas.set_logical_size(ppu::SCREEN_WIDTH as u32, ppu::SCREEN_HEIGHT as u32).unwrap();
         canvas.set_integer_scale(true).unwrap();
@@ -101,6 +84,7 @@ impl game_boy_hardware::Frontend for PCHardware
                 self.canvas.draw_point(Point::new(x_coord as i32, y_coord as i32)).unwrap();
             }
         }
+        self.canvas.window_mut().raise();
         self.canvas.present();
     }
 }

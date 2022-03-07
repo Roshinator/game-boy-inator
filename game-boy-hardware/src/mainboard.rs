@@ -1,5 +1,4 @@
 use std::{cell::{RefCell, Ref}, rc::Rc};
-
 use crate::{cpu::Cpu, ram::Ram, rom::Rom, timer::Timer, ppu::{self, Ppu}};
 
 pub const CLOCK_EDGE:f64 = 8_338_608_f64;
