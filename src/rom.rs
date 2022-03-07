@@ -39,7 +39,7 @@ pub struct Rom
 
 impl Rom
 {
-    pub fn new(mut f: File) -> Rom
+    pub fn new(mut f: File, frontend: crate::HardwareHandle) -> Rom
     {
         let mut bytes = Vec::new();
         let _result = f.read_to_end(&mut bytes);
@@ -121,6 +121,7 @@ impl Rom
 
         //Print ROM details
         println!("{:?}", rom);
+        frontend.borrow_mut().receive_rom_information(&rom.title);
         return rom;
     }
 }

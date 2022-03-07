@@ -41,7 +41,7 @@ impl Mainboard
         {
             Ok(f) =>
             {
-                self.ram.load_rom(&Rom::new(f));
+                self.ram.load_rom(&Rom::new(f, Rc::clone(&self.hardware_handle)));
                 Ok(())
             },
             Err(x) => Err(x)
