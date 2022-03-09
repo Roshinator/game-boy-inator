@@ -285,7 +285,7 @@ impl Ppu
         }
         let tile_index = ram.read(*start + ((y_coord as u16 / 8) * 32 + x_coord as u16 / 8));
         let tile_addr = self.get_tile_addr(tile_index, y_coord % 8, low_bank);
-        return self.get_color_from_tilemap(&[ram.read(tile_addr), ram.read(tile_addr + 1)], x_coord);
+        return self.get_color_from_tilemap(&[ram.read(tile_addr), ram.read(tile_addr + 1)], x_coord % 8);
     }
 
     fn get_sprites_from_oam(&mut self, ram: &mut Ram, scan_num: u8) -> Vec<Sprite>
