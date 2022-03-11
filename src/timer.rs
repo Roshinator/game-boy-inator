@@ -42,7 +42,7 @@ impl Timer
         //TIMA overflow timing may be incorrect
         if self.tima_overflow
         {
-            ram.set_interrupt(ram::INTERRUPT_TIMA);
+            ram.set_interrupt(ram::InterruptFlag::TIMA);
             self.tima_overflow = false;
 
             ram.write(ram::TIMA, ram.read(ram::TMA));

@@ -38,11 +38,17 @@ pub const IF:u16 = 0xFF0F;
 pub const IE:u16 = 0xFFFF;
 
 //----Interrupt Bits----
-pub const INTERRUPT_VB:u8 = 1 << 0;
-pub const INTERRUPT_LCDC:u8 = 1 << 1;
-pub const INTERRUPT_TIMA:u8 = 1 << 2;
-pub const INTERRUPT_SIO_TRANSFER_COMPLETE:u8 = 1 << 3;
-pub const INTERRUPT_P1X_NEG_EDGE:u8 = 1 << 4;
+bitflags::bitflags! 
+{
+    pub struct InterruptFlag: u8
+    {
+        const VB = 1 << 0;
+        const LCDC = 1 << 1;
+        const TIMA = 1 << 2;
+        const SIO_TRANSFER_COMPLETE = 1 << 3;
+        const P1X_NEG_EDGE = 1 << 4;
+    }
+}
 
 pub const SC_BOOT_ROM_DISABLE:u16 = 0xFF50;
 
@@ -162,14 +168,14 @@ impl Ram
     //bit 3: Serial I/O transfer complete
     //bit 4: P10-P13 negative edge
 
-    pub fn set_interrupt(&mut self, interrupt: u8)
+    pub fn set_interrupt(&mut self, interrupt: InterruptFlag)
     {
-        self.mem[IF as usize] |= interrupt;
+        self.mem[IF as usize] |= interrupt.bits;
     }
 
-    pub fn reset_interrupt(&mut self, interrupt: u8)
+    pub fn reset_interrupt(&mut self, interrupt: InterruptFlag)
     {
-        self.mem[IF as usize] = !(!self.mem[IF as usize] | interrupt);
+        self.mem[IF as usize] = !(!self.mem[IF as usize] | interrupt.bits);
     }
 }
 

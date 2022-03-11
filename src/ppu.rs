@@ -6,14 +6,20 @@ const CYCLES_PER_SCANLINE:u64 = 456;
 const VBLANK_LINES:u64 = 10;
 pub const CYCLES_PER_FRAME:u64 = CYCLES_PER_SCANLINE * (SCREEN_HEIGHT as u64 + VBLANK_LINES);
 
-const LCDC_BG_ENABLE:u8 = 1 << 0;
-const LCDC_OBJ_ON:u8 = 1 << 1;
-const LCDC_OBJ_SIZE_SELECT:u8 = 1 << 2; //OBJ_BLOCK_COMP 0=8x8, 1=8x16
-const LCDC_BG_CODE_AREA_SELECT:u8 = 1 << 3;
-const LCDC_CHAR_DATA_SELECT:u8 = 1 << 4;
-const LCDC_WINDOWING_ON:u8 = 1 << 5;
-const LCDC_WINDOW_CODE_AREA_SELECT:u8 = 1 << 6;
-const LCDC_LCD_CONTROLLER_OPERATION_ON:u8 = 1 << 7;
+bitflags::bitflags!
+{
+    struct LcdcFlag: u8
+    {
+        const BG_ENABLE = 1 << 0;
+        const OBJ_ON = 1 << 1;
+        const OBJ_SIZE_SELECT = 1 << 2; //OBJ_BLOCK_COMP 0=8x8, 1=8x16
+        const BG_CODE_AREA_SELECT = 1 << 3;
+        const CHAR_DATA_SELECT = 1 << 4;
+        const WINDOWING_ON = 1 << 5;
+        const WINDOW_CODE_AREA_SELECT = 1 << 6;
+        const LCD_CONTROLLER_OPERATION_ON = 1 << 7;
+    }
+}
 
 const STAT_MODE:u8 = 0b00000011;
 const STAT_MATCH:u8 = 1 << 2;
@@ -87,7 +93,7 @@ impl Ppu
 
     fn pixel_update(&mut self, ram: &mut Ram, scan_line: u8)
     {
-        let lcd_on = ram.read(ram::LCDC) & LCDC_LCD_CONTROLLER_OPERATION_ON != 0;
+        let lcd_on = ram.read(ram::LCDC) & LcdcFlag::LCD_CONTROLLER_OPERATION_ON.bits != 0;
         ram.write(ram::LY, scan_line);
         let status = ram.read(ram::STAT);
 
@@ -96,7 +102,7 @@ impl Ppu
             let y_compare_match = ram.read(ram::LYC) == scan_line;
             if y_compare_match && status & 0x04 == 0 && status & 0x40 != 0 //If match, fresh match, and interrupt mode set to compare match, fire interrupt
             {
-                ram.set_interrupt(ram::INTERRUPT_LCDC)
+                ram.set_interrupt(ram::InterruptFlag::LCDC)
             }
             ram.write(ram::STAT, status & !((!y_compare_match as u8) << 2));
         }
@@ -108,7 +114,7 @@ impl Ppu
         {
             if mode != 1
             {
-                ram.set_interrupt(ram::INTERRUPT_VB);
+                ram.set_interrupt(ram::InterruptFlag::VB);
                 //Set mode to 1
                 ram.write(ram::STAT, ram.read(ram::STAT) & 0b11111101);
 
@@ -125,7 +131,7 @@ impl Ppu
                     ram.write(ram::STAT, (ram.read(ram::STAT) & 0b11111100) | 0b00000010);
                     if status & (1 << 5) != 0
                     {
-                        ram.set_interrupt(ram::INTERRUPT_LCDC);
+                        ram.set_interrupt(ram::InterruptFlag::LCDC);
                     }
                     self.sprite_buffer = self.get_sprites_from_oam(ram, scan_line);
                     self.current_x = 0;
@@ -152,7 +158,7 @@ impl Ppu
                     ram.write(ram::STAT, (ram.read(ram::STAT) & 0b11111100) | 0b11111100);
                     if status & (1 << 3) != 0
                     {
-                        ram.set_interrupt(ram::INTERRUPT_LCDC);
+                        ram.set_interrupt(ram::InterruptFlag::LCDC);
                     }
                     if lcd_on
                     {
@@ -174,15 +180,15 @@ impl Ppu
 
     fn draw_pixel(&mut self, ram: &mut Ram, scan_line: u8, x_coord: u8)
     {
-        let lcdc = ram.read(ram::LCDC);
-        let bg_enable = lcdc & LCDC_BG_ENABLE != 0;
-        let obj_on = lcdc & LCDC_OBJ_ON != 0;
-        let bg_tile_hi_map = lcdc & LCDC_BG_CODE_AREA_SELECT != 0;
-        let bg_char_lo_tiles = lcdc & LCDC_CHAR_DATA_SELECT != 0;
-        let windowing_on = lcdc & LCDC_WINDOWING_ON != 0;
-        let windowing_tile_hi_map = lcdc & LCDC_WINDOW_CODE_AREA_SELECT != 0;
+        let lcdc = LcdcFlag::from_bits(ram.read(ram::LCDC)).unwrap();
+        let bg_enable = lcdc.contains(LcdcFlag::BG_ENABLE);
+        let obj_on = lcdc.contains(LcdcFlag::OBJ_ON);
+        let bg_tile_hi_map = lcdc.contains(LcdcFlag::BG_CODE_AREA_SELECT);
+        let bg_char_lo_tiles = lcdc.contains(LcdcFlag::CHAR_DATA_SELECT);
+        let windowing_on = lcdc.contains(LcdcFlag::WINDOWING_ON);
+        let windowing_tile_hi_map = lcdc.contains(LcdcFlag::WINDOW_CODE_AREA_SELECT);
         let mut sprite_height = 8_u8;
-        if lcdc & LCDC_OBJ_SIZE_SELECT != 0
+        if lcdc.contains(LcdcFlag::OBJ_SIZE_SELECT)
         {
             sprite_height = 16;
         }
@@ -294,7 +300,7 @@ impl Ppu
         sprites.reserve_exact(11);
 
         let sprite_height;
-        if (ram.read(ram::LCDC) & LCDC_OBJ_SIZE_SELECT) == 0
+        if (ram.read(ram::LCDC) & LcdcFlag::OBJ_SIZE_SELECT.bits) == 0
         {
             sprite_height = 8_u8;
         }

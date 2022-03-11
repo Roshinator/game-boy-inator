@@ -16,11 +16,16 @@ const REG_L:Reg = 7;
 
 //in an AF situation, A is msh, F is lsh, little endian
 
-type Flag = u8;
-const FLAG_Z:Flag = 7;
-const FLAG_N:Flag = 6;
-const FLAG_H:Flag = 5;
-const FLAG_C:Flag = 4;
+bitflags::bitflags! 
+{
+    pub struct Flag: u8
+    {
+        const FLAG_Z = 1 << 7;
+        const FLAG_N = 1 << 6;
+        const FLAG_H = 1 << 5;
+        const FLAG_C = 1 << 4;
+    }
+}
 
 const ZERO_INSTRUCTION_TIME_TABLE:[u8;0x100] = //M-cycle timings
     [1,3,2,2,1,1,2,1,5,2,2,2,1,1,2,1,
@@ -84,10 +89,10 @@ impl Cpu
         Cpu
         {
             regs: [0x01, 0x00, 0x13, 0x00, 0xD8, 0xB0, 0x01, 0x4D],
-            sp: 0,
+            sp: 0xFFFE,
             pc: ProgramCounter
             {
-                reg: 0, should_increment: true, current_instruction_width: 1, current_instruction_cycles: 0
+                reg: 0x0000, should_increment: true, current_instruction_width: 1, current_instruction_cycles: 0
             },
             ime: false,
             halted: false,
@@ -103,18 +108,18 @@ impl Cpu
 
     fn aux_read_flag(&self, param: Flag) -> bool
     {
-        (self.regs[REG_F] & 1 << param) != 0
+        (self.regs[REG_F] & param.bits) != 0
     }
 
     fn aux_write_flag(&mut self, param: Flag, data: bool)
     {
         if data
         {
-            self.regs[REG_F] = self.regs[REG_F] | (1 << param);
+            self.regs[REG_F] = self.regs[REG_F] | (param.bits);
         }
         else
         {
-            self.regs[REG_F] = self.regs[REG_F] & (!(1 << param));
+            self.regs[REG_F] = self.regs[REG_F] & (!param.bits);
         }
     }
 
@@ -238,9 +243,9 @@ impl Cpu
         let result = u8::overflowing_add(self.regs[reg], 1);
         self.regs[reg] = result.0;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, result.1);
     }
 
     fn inc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
@@ -249,9 +254,9 @@ impl Cpu
             self.regs[msh], self.regs[lsh]).overflowing_add(1);
         ram.write_rp(self.regs[msh], self.regs[lsh], result.0);
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, result.1);
     }
 
     fn dec_r8(&mut self, reg: Reg)
@@ -259,9 +264,9 @@ impl Cpu
         let result = u8::overflowing_sub(self.regs[reg], 1);
         self.regs[reg] = result.0;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_H, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_H, result.1);
     }
 
     fn dec_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
@@ -270,9 +275,9 @@ impl Cpu
             self.regs[msh], self.regs[lsh]).overflowing_sub(1);
         ram.write_rp(self.regs[msh], self.regs[lsh], result.0);
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_H, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_H, result.1);
     }
 
     fn dec_r16(&mut self, msh: Reg, lsh: Reg)
@@ -296,10 +301,10 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn add_r8_8(&mut self, p1: Reg, p2: u8)
@@ -309,34 +314,34 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn add_r16_r16(&mut self, p1_msh: Reg, p1_lsh: Reg, p2_msh: Reg, p2_lsh: Reg)
     {
-        let z = self.aux_read_flag(FLAG_Z);
+        let z = self.aux_read_flag(Flag::FLAG_Z);
         self.add_r8_r8(p1_lsh, p2_lsh);
         self.adc_r8_r8(p1_msh, p2_msh);
 
-        self.aux_write_flag(FLAG_Z, z);
-        self.aux_write_flag(FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_Z, z);
+        self.aux_write_flag(Flag::FLAG_N, false);
     }
 
     fn add_r16_sp(&mut self, p1_msh: Reg, p1_lsh: Reg)
     {
-        let z = self.aux_read_flag(FLAG_Z);
+        let z = self.aux_read_flag(Flag::FLAG_Z);
         let reg = self.sp.to_le_bytes();
 
         //ADD
         let result = self.regs[p1_lsh].overflowing_add(reg[0]);
         self.regs[p1_lsh] = result.0;
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
 
         //ADC
-        let carry = self.aux_read_flag(FLAG_C) as u8;
+        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
         let half_carry_pre1 = ((self.regs[p1_msh] ^ reg[1]) >> 4) & 1;
         let result1 = self.regs[p1_msh].overflowing_add(reg[1]);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -345,10 +350,10 @@ impl Cpu
         self.regs[p1_msh] = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, result1.1 || result2.1);
-        self.aux_write_flag(FLAG_Z, z);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
+        self.aux_write_flag(Flag::FLAG_Z, z);
     }
 
     fn add_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
@@ -359,10 +364,10 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre == half_carry_post);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre == half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn add_sp_i8(&mut self, p1: i8)
@@ -381,7 +386,7 @@ impl Cpu
 
     fn adc_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
-        let carry = self.aux_read_flag(FLAG_C) as u8;
+        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
         let half_carry_pre1 = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_add(self.regs[p2]);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -390,15 +395,15 @@ impl Cpu
         self.regs[p1] = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, result1.1 || result2.1);
+        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
     }
 
     fn adc_r8_8(&mut self, p1: Reg, p2: u8)
     {
-        let carry = self.aux_read_flag(FLAG_C) as u8;
+        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
         let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_add(p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -407,15 +412,15 @@ impl Cpu
         self.regs[p1] = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, result1.1 || result2.1);
+        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
     }
 
     fn adc_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let carry = self.aux_read_flag(FLAG_C) as u8;
+        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
         let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_add(p2);
@@ -425,10 +430,10 @@ impl Cpu
         self.regs[p1] = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, result1.1 || result2.1);
+        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
     }
 
     //TODO: Check subtraction half carry calculations
@@ -439,10 +444,10 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn sub_r8_8(&mut self, p1: Reg, p2: u8)
@@ -452,10 +457,10 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn sub_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
@@ -466,15 +471,15 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn sbc_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
-        let carry = self.aux_read_flag(FLAG_C) as u8;
+        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
         let half_carry_pre1 = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_sub(self.regs[p2]);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -483,15 +488,15 @@ impl Cpu
         self.regs[p1] = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result1.1 || result2.1);
+        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
     }
 
     fn sbc_r8_8(&mut self, p1: Reg, p2: u8)
     {
-        let carry = self.aux_read_flag(FLAG_C) as u8;
+        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
         let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_sub(p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
@@ -500,15 +505,15 @@ impl Cpu
         self.regs[p1] = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result1.1 || result2.1);
+        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
     }
 
     fn sbc_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
-        let carry = self.aux_read_flag(FLAG_C) as u8;
+        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
         let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
         let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
         let result1 = self.regs[p1].overflowing_sub(p2);
@@ -518,100 +523,100 @@ impl Cpu
         self.regs[p1] = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result1.1 || result2.1);
+        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
     }
 
     fn and_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
         self.regs[p1] &= self.regs[p2];
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, true);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, true);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn and_r8_8(&mut self, p1: Reg, p2: u8)
     {
         self.regs[p1] &= p2;
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, true);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, true);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn and_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
         self.regs[p1] &= ram.read_rp(self.regs[msh], self.regs[lsh]);
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, true);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, true);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn xor_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
         self.regs[p1] ^= self.regs[p2];
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn xor_r8_8(&mut self, p1: Reg, p2: u8)
     {
         self.regs[p1] ^= p2;
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn xor_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
         self.regs[p1] ^= ram.read_rp(self.regs[msh], self.regs[lsh]);
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn or_r8_r8(&mut self, p1: Reg, p2: Reg)
     {
         self.regs[p1] |= self.regs[p2];
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn or_r8_8(&mut self, p1: Reg, p2: u8)
     {
         self.regs[p1] |= p2;
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn or_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
     {
         self.regs[p1] |= ram.read_rp(self.regs[msh], self.regs[lsh]);
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_H, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_C, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_C, false);
     }
 
     fn cp_r8_r8(&mut self, p1: Reg, p2: Reg)
@@ -621,10 +626,10 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn cp_r8_8(&mut self, p1: Reg, p2: u8)
@@ -634,10 +639,10 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn cp_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
@@ -648,57 +653,57 @@ impl Cpu
         self.regs[p1] = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(FLAG_Z, result.0 == 0);
-        self.aux_write_flag(FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_C, result.1);
+        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
+        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_C, result.1);
     }
 
     fn daa(&mut self)
     {
-        let c_before = self.aux_read_flag(FLAG_C);
+        let c_before = self.aux_read_flag(Flag::FLAG_C);
         let bits_47 = (self.regs[REG_A] >> 4) & 0b00001111;
-        let h_before = self.aux_read_flag(FLAG_H);
+        let h_before = self.aux_read_flag(Flag::FLAG_H);
         let bits_03 = self.regs[REG_A] & 0b00001111;
-        if self.aux_read_flag(FLAG_N) == true //Add preceded instruction
+        if self.aux_read_flag(Flag::FLAG_N) == true //Add preceded instruction
         {
             match (c_before, bits_47, h_before, bits_03)
             {
                 (false, 0x0..=0x9, false, 0x0..=0x9) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x00);
-                    self.aux_write_flag(FLAG_C, false);
+                    self.aux_write_flag(Flag::FLAG_C, false);
                 },
                 (false, 0x0..=0x8, false, 0xA..=0xF) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x06);
-                    self.aux_write_flag(FLAG_C, false);
+                    self.aux_write_flag(Flag::FLAG_C, false);
                 },
                 (false, 0x0..=0x9, true, 0x0..=0x3) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x06);
-                    self.aux_write_flag(FLAG_C, false);
+                    self.aux_write_flag(Flag::FLAG_C, false);
                 },
                 (false, 0xA..=0xF, false, 0x0..=0x9) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x60);
-                    self.aux_write_flag(FLAG_C, true);
+                    self.aux_write_flag(Flag::FLAG_C, true);
                 },
                 (false, 0x9..=0xF, false, 0xA..=0xF) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
-                    self.aux_write_flag(FLAG_C, true);
+                    self.aux_write_flag(Flag::FLAG_C, true);
                 },
                 (false, 0xA..=0xF, true, 0x0..=0x3) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
-                    self.aux_write_flag(FLAG_C, true);
+                    self.aux_write_flag(Flag::FLAG_C, true);
                 },
                 (true, 0x0..=0x2, false, 0x0..=0x9) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x60);
-                    self.aux_write_flag(FLAG_C, true);
+                    self.aux_write_flag(Flag::FLAG_C, true);
                 },
                 (true, 0x0..=0x2, false, 0xA..=0xF) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
-                    self.aux_write_flag(FLAG_C, true);
+                    self.aux_write_flag(Flag::FLAG_C, true);
                 },
                 (true, 0x0..=0x3, true, 0x0..=0x3) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
-                    self.aux_write_flag(FLAG_C, true);
+                    self.aux_write_flag(Flag::FLAG_C, true);
                 },
                 _ => panic!("Invalid BDC conversion")
             }
@@ -709,19 +714,19 @@ impl Cpu
             {
                 (false, 0x0..=0x9, false, 0x0..=0x9) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x00);
-                    self.aux_write_flag(FLAG_C, false);
+                    self.aux_write_flag(Flag::FLAG_C, false);
                 },
                 (false, 0x0..=0x8, true, 0x6..=0xF) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0xFA);
-                    self.aux_write_flag(FLAG_C, false);
+                    self.aux_write_flag(Flag::FLAG_C, false);
                 },
                 (true, 0x7..=0xF, false, 0x0..=0x9) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0xA0);
-                    self.aux_write_flag(FLAG_C, true);
+                    self.aux_write_flag(Flag::FLAG_C, true);
                 },
                 (true, 0x6..=0xF, true, 0x6..=0xF) => {
                     self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x9A);
-                    self.aux_write_flag(FLAG_C, true);
+                    self.aux_write_flag(Flag::FLAG_C, true);
                 },
                 _ => panic!("Invalid BDC conversion")
             }
@@ -731,22 +736,22 @@ impl Cpu
     fn cpl(&mut self)
     {
         self.regs[REG_A] = !self.regs[REG_A];
-        self.aux_write_flag(FLAG_N, true);
-        self.aux_write_flag(FLAG_H, true);
+        self.aux_write_flag(Flag::FLAG_N, true);
+        self.aux_write_flag(Flag::FLAG_H, true);
     }
 
     fn ccf(&mut self)
     {
-        self.aux_write_flag(FLAG_C, !self.aux_read_flag(FLAG_C));
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_C, !self.aux_read_flag(Flag::FLAG_C));
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn scf(&mut self)
     {
-        self.aux_write_flag(FLAG_C, true);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_C, true);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn jp_pc_16(&mut self, msh: u8, lsh: u8)
@@ -865,202 +870,202 @@ impl Cpu
 
     fn rlc_r8(&mut self, p1: Reg)
     {
-        self.aux_write_flag(FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
         self.regs[p1] = self.regs[p1].rotate_left(1);
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rlca(&mut self)
     {
-        self.aux_write_flag(FLAG_C, (self.regs[REG_A] >> 7) & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, (self.regs[REG_A] >> 7) & 1 != 0);
         self.regs[REG_A] = self.regs[REG_A].rotate_left(1);
 
-        self.aux_write_flag(FLAG_Z, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rlc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
         let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, (p1 >> 7) & 1 != 0);
         let result = p1.rotate_left(1);
         ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
-        self.aux_write_flag(FLAG_Z, result == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, result == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rrc_r8(&mut self, p1: Reg)
     {
-        self.aux_write_flag(FLAG_C, self.regs[p1] & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, self.regs[p1] & 1 != 0);
         self.regs[p1] = self.regs[p1].rotate_right(1);
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rrca(&mut self)
     {
-        self.aux_write_flag(FLAG_C, self.regs[REG_A] & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, self.regs[REG_A] & 1 != 0);
         self.regs[REG_A] = self.regs[REG_A].rotate_right(1);
 
-        self.aux_write_flag(FLAG_Z, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rrc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
         let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(FLAG_C, p1 & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, p1 & 1 != 0);
         let result = p1.rotate_right(1);
         ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
-        self.aux_write_flag(FLAG_Z, result == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, result == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rl_r8(&mut self, p1: Reg)
     {
-        let cin = self.aux_read_flag(FLAG_C) as u8;
-        self.aux_write_flag(FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
+        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
+        self.aux_write_flag(Flag::FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
         self.regs[p1] = (self.regs[p1] << 1u8) | cin;
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rla(&mut self)
     {
-        let cin = self.aux_read_flag(FLAG_C) as u8;
-        self.aux_write_flag(FLAG_C, (self.regs[REG_A] >> 7) & 1 != 0);
+        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
+        self.aux_write_flag(Flag::FLAG_C, (self.regs[REG_A] >> 7) & 1 != 0);
         self.regs[REG_A] = (self.regs[REG_A] << 1u8) | cin;
 
-        self.aux_write_flag(FLAG_Z, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rl_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let cin = self.aux_read_flag(FLAG_C) as u8;
+        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
         let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, (p1 >> 7) & 1 != 0);
         let result = (p1 << 1u8) | cin;
         ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
-        self.aux_write_flag(FLAG_Z, result == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, result == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rr_r8(&mut self, p1: Reg)
     {
-        let cin = self.aux_read_flag(FLAG_C) as u8;
-        self.aux_write_flag(FLAG_C, self.regs[p1] & 1 != 0);
+        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
+        self.aux_write_flag(Flag::FLAG_C, self.regs[p1] & 1 != 0);
         self.regs[p1] = (self.regs[p1] >> 1u8) | (cin << 7u8);
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rra(&mut self)
     {
-        let cin = self.aux_read_flag(FLAG_C) as u8;
-        self.aux_write_flag(FLAG_C, self.regs[REG_A] & 1 != 0);
+        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
+        self.aux_write_flag(Flag::FLAG_C, self.regs[REG_A] & 1 != 0);
         self.regs[REG_A] = (self.regs[REG_A] >> 1u8) | (cin << 7u8);
 
-        self.aux_write_flag(FLAG_Z, false);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, false);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn rr_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
-        let cin = self.aux_read_flag(FLAG_C) as u8;
+        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
         let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(FLAG_C, p1 & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, p1 & 1 != 0);
         let result = (p1 >> 1u8) | (cin << 7u8);
         ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
-        self.aux_write_flag(FLAG_Z, result == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, result == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn sla_r8(&mut self, p1: Reg)
     {
-        self.aux_write_flag(FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
         self.regs[p1] <<= 1u8;
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn sla_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
         let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(FLAG_C, (p1 >> 7) & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, (p1 >> 7) & 1 != 0);
         let result = p1 << 1u8;
         ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
-        self.aux_write_flag(FLAG_Z, result == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, result == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn sra_r8(&mut self, p1: Reg)
     {
-        self.aux_write_flag(FLAG_C, self.regs[p1] & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, self.regs[p1] & 1 != 0);
         self.regs[p1] = (self.regs[p1] >> 1u8) | (self.regs[p1] & 0b10000000u8); //fill with leftmost
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn sra_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
         let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(FLAG_C, p1 & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, p1 & 1 != 0);
         let result =( p1 >> 1u8) | (p1 | 0b10000000u8);
         ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
-        self.aux_write_flag(FLAG_Z, result == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, result == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn srl_r8(&mut self, p1: Reg)
     {
-        self.aux_write_flag(FLAG_C, self.regs[p1] & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, self.regs[p1] & 1 != 0);
         self.regs[p1] >>= 1u8; //fill with leftmost
 
-        self.aux_write_flag(FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn srl_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
     {
         let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(FLAG_C, p1 & 1 != 0);
+        self.aux_write_flag(Flag::FLAG_C, p1 & 1 != 0);
         let result = p1 >> 1u8;
         ram.write_rp(self.regs[msh], self.regs[lsh], result);
 
-        self.aux_write_flag(FLAG_Z, result == 0);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_H, false);
+        self.aux_write_flag(Flag::FLAG_Z, result == 0);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_H, false);
     }
 
     fn swap_r8(&mut self, p1: Reg)
@@ -1080,16 +1085,16 @@ impl Cpu
 
     fn bit_r8(&mut self, p1: u8, p2: Reg)
     {
-        self.aux_write_flag(FLAG_H, true);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_Z, (self.regs[p2] & (1u8 << p1)) == 0);
+        self.aux_write_flag(Flag::FLAG_H, true);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_Z, (self.regs[p2] & (1u8 << p1)) == 0);
     }
 
     fn bit_r16a(&mut self, ram: &mut Ram, p1: u8, msh: Reg, lsh: Reg)
     {
-        self.aux_write_flag(FLAG_H, true);
-        self.aux_write_flag(FLAG_N, false);
-        self.aux_write_flag(FLAG_Z,
+        self.aux_write_flag(Flag::FLAG_H, true);
+        self.aux_write_flag(Flag::FLAG_N, false);
+        self.aux_write_flag(Flag::FLAG_Z,
             (ram.read_rp(self.regs[msh], self.regs[lsh]) & (1u8 << p1)) == 0);
     }
 
@@ -1195,31 +1200,31 @@ impl Cpu
         }
 
         //Fetch
-        let valid_interrupts = ram.read(ram::IF) & ram.read(ram::IE);
+        let valid_interrupts = ram::InterruptFlag::from_bits(ram.read(ram::IF) & ram.read(ram::IE)).unwrap();
         if self.ime
         {
-            if valid_interrupts != 0
+            if !valid_interrupts.is_empty()
             {
                 self.ime = false;
                 self.push_pc(ram);
             }
-            if valid_interrupts & ram::INTERRUPT_VB != 0
+            if valid_interrupts.contains(ram::InterruptFlag::VB)
             {
                 self.pc.reg = 0x0040;
             }
-            else if valid_interrupts & ram::INTERRUPT_LCDC != 0
+            else if valid_interrupts.contains(ram::InterruptFlag::LCDC)
             {
                 self.pc.reg = 0x0048;
             }
-            else if valid_interrupts & ram::INTERRUPT_TIMA != 0
+            else if valid_interrupts.contains(ram::InterruptFlag::TIMA)
             {
                 self.pc.reg = 0x0050;
             }
-            else if valid_interrupts & ram::INTERRUPT_SIO_TRANSFER_COMPLETE != 0
+            else if valid_interrupts.contains(ram::InterruptFlag::SIO_TRANSFER_COMPLETE)
             {
                 self.pc.reg = 0x0058;
             }
-            else if valid_interrupts & ram::INTERRUPT_P1X_NEG_EDGE != 0
+            else if valid_interrupts.contains(ram::InterruptFlag::P1X_NEG_EDGE)
             {
                 self.pc.reg = 0x0060;
             }
@@ -1228,7 +1233,7 @@ impl Cpu
 
         if self.halted
         {
-            if valid_interrupts != 0
+            if !valid_interrupts.is_empty()
             {
                 self.halted = false;
             }
@@ -1242,6 +1247,11 @@ impl Cpu
 
         #[cfg(feature = "cpu-debug")]
         println!("Instruction: 0x{:02X?}, Program Counter: 0x{:02X?}", instruction, &self.pc.reg);
+
+        if self.pc.reg == 0xFA
+        {
+            println!("Copy check");
+        }
 
         if instruction != 0xCB
         {
@@ -1308,7 +1318,7 @@ impl Cpu
                 0x1F => {self.rra();},
                 0x20 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_nflag_i8(FLAG_Z, immediate);
+                    self.jr_nflag_i8(Flag::FLAG_Z, immediate);
                 },
                 0x21 => {
                     let lsh = self.aux_read_immediate_data(ram);
@@ -1329,7 +1339,7 @@ impl Cpu
                 0x27 => {self.daa();},
                 0x28 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_flag_i8(FLAG_Z, immediate);
+                    self.jr_flag_i8(Flag::FLAG_Z, immediate);
                 },
                 0x29 => {self.add_r16_r16(REG_H, REG_L, REG_H, REG_L)},
                 0x2A => {
@@ -1346,7 +1356,7 @@ impl Cpu
                 0x2F => {self.cpl();},
                 0x30 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_nflag_i8(FLAG_C, immediate);
+                    self.jr_nflag_i8(Flag::FLAG_C, immediate);
                 },
                 0x31 => {
                     let lsh = self.aux_read_immediate_data(ram);
@@ -1367,7 +1377,7 @@ impl Cpu
                 0x37 => {self.scf();},
                 0x38 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_flag_i8(FLAG_C, immediate);
+                    self.jr_flag_i8(Flag::FLAG_C, immediate);
                 },
                 0x39 => {self.add_r16_sp(REG_H, REG_L);},
                 0x3A => {
@@ -1510,12 +1520,12 @@ impl Cpu
                 0xBD => {self.cp_r8_r8(REG_A, REG_L);},
                 0xBE => {self.cp_r8_r16a(ram, REG_A, REG_H, REG_L);},
                 0xBF => {self.cp_r8_r8(REG_A, REG_A);},
-                0xC0 => {self.ret_nflag(ram, FLAG_Z);},
+                0xC0 => {self.ret_nflag(ram, Flag::FLAG_Z);},
                 0xC1 => {self.pop_r16(ram, REG_B, REG_C);},
                 0xC2 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_nflag_pc_16(FLAG_Z, msh, lsh);
+                    self.jp_nflag_pc_16(Flag::FLAG_Z, msh, lsh);
                 },
                 0xC3 => {
                     let lsh = self.aux_read_immediate_data(ram);
@@ -1525,7 +1535,7 @@ impl Cpu
                 0xC4 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_nflag_16(ram, FLAG_Z, msh, lsh);
+                    self.call_nflag_16(ram, Flag::FLAG_Z, msh, lsh);
                 },
                 0xC5 => {self.push_r16(ram, REG_B, REG_C);},
                 0xC6 => {
@@ -1533,18 +1543,18 @@ impl Cpu
                     self.add_r8_8(REG_A, num);
                 },
                 0xC7 => {self.rst(ram, 0x00);},
-                0xC8 => {self.ret_flag(ram, FLAG_Z);},
+                0xC8 => {self.ret_flag(ram, Flag::FLAG_Z);},
                 0xC9 => {self.ret(ram);},
                 0xCA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_flag_pc_16(FLAG_Z, msh, lsh);
+                    self.jp_flag_pc_16(Flag::FLAG_Z, msh, lsh);
                 },
                 0xCB => {/*Prefix for the next instruction, handled earlier*/},
                 0xCC => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_flag_16(ram, FLAG_Z, msh, lsh);
+                    self.call_flag_16(ram, Flag::FLAG_Z, msh, lsh);
                 },
                 0xCD => {let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
@@ -1554,18 +1564,18 @@ impl Cpu
                     self.adc_r8_8(REG_A, num);
                 },
                 0xCF => {self.rst(ram, 0x08);},
-                0xD0 => {self.ret_nflag(ram, FLAG_C);},
+                0xD0 => {self.ret_nflag(ram, Flag::FLAG_C);},
                 0xD1 => {self.pop_r16(ram, REG_D, REG_E);},
                 0xD2 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_nflag_pc_16(FLAG_C, msh, lsh);
+                    self.jp_nflag_pc_16(Flag::FLAG_C, msh, lsh);
                 },
                 0xD3 => {self.invalid_instruction(0xD3);},
                 0xD4 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_nflag_16(ram, FLAG_C, msh, lsh);
+                    self.call_nflag_16(ram, Flag::FLAG_C, msh, lsh);
                 },
                 0xD5 => {self.push_r16(ram, REG_D, REG_E);},
                 0xD6 => {
@@ -1573,18 +1583,18 @@ impl Cpu
                     self.sub_r8_8(REG_A, num);
                 },
                 0xD7 => {self.rst(ram, 0x10);},
-                0xD8 => {self.ret_flag(ram, FLAG_C);},
+                0xD8 => {self.ret_flag(ram, Flag::FLAG_C);},
                 0xD9 => {self.reti(ram);},
                 0xDA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_flag_pc_16(FLAG_C, msh, lsh);
+                    self.jp_flag_pc_16(Flag::FLAG_C, msh, lsh);
                 },
                 0xDB => {self.invalid_instruction(0xDB);},
                 0xDC => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_flag_16(ram, FLAG_C, msh, lsh);
+                    self.call_flag_16(ram, Flag::FLAG_C, msh, lsh);
                 },
                 0xDD => {self.invalid_instruction(0xDD);},
                 0xDE => {
