@@ -16,24 +16,32 @@ mod alu_tests
     }
 
     #[test]
-    #[ignore = "INCS cant be performed, flags not modified"]
     fn test_inc_r16()
     {
         let mut cpu = Cpu::new();
-        todo!();
+        let [lsh, msh] = u16::to_le_bytes(0xABCD);
+        let flags_before = cpu.regs[REG_F];
+        cpu.regs[REG_H] = msh;
+        cpu.regs[REG_L] = lsh;
+        cpu.inc_r16(REG_H, REG_L);
+        let [lsh_after, msh_after] = u16::to_le_bytes(0xABCE);
+        assert_eq!(msh_after, cpu.regs[REG_H]);
+        assert_eq!(lsh_after, cpu.regs[REG_L]);
+        assert_eq!(flags_before, cpu.regs[REG_F]);
     }
 
     #[test]
-    #[ignore = "INCS cant be performed, flags not modified"]
     fn test_inc_sp()
     {
         let mut cpu = Cpu::new();
-        todo!();
-        //INCS cant be performed, flags not modified
+        let flags_before = cpu.regs[REG_F];
+        cpu.sp = 0xABCD;
+        cpu.inc_sp();
+        assert_eq!(cpu.sp, 0xABCE);
+        assert_eq!(flags_before, cpu.regs[REG_F]);
     }
 
     #[test]
-    #[ignore = "INCS cant be performed, flags not modified"]
     fn test_inc_r8()
     {
         let mut cpu = Cpu::new();
@@ -42,7 +50,6 @@ mod alu_tests
     }
 
     #[test]
-    #[ignore = "INCS cant be performed, flags not modified"]
     fn test_inc_r16a()
     {
         let mut cpu = Cpu::new();
@@ -51,7 +58,6 @@ mod alu_tests
     }
 
     #[test]
-    #[ignore = "INCS cant be performed, flags not modified"]
     fn test_dec_r8()
     {
         let mut cpu = Cpu::new();
@@ -60,7 +66,6 @@ mod alu_tests
     }
 
     #[test]
-    #[ignore = "INCS cant be performed, flags not modified"]
     fn test_dec_r16a()
     {
         let mut cpu = Cpu::new();
@@ -69,21 +74,29 @@ mod alu_tests
     }
 
     #[test]
-    #[ignore = "INCS cant be performed, flags not modified"]
     fn test_dec_r16()
     {
         let mut cpu = Cpu::new();
-        todo!();
-        //INCS cant be performed, flags not modified
+        let [lsh, msh] = u16::to_le_bytes(0xABCD);
+        let flags_before = cpu.regs[REG_F];
+        cpu.regs[REG_H] = msh;
+        cpu.regs[REG_L] = lsh;
+        cpu.dec_r16(REG_H, REG_L);
+        let [lsh_after, msh_after] = u16::to_le_bytes(0xABCC);
+        assert_eq!(msh_after, cpu.regs[REG_H]);
+        assert_eq!(lsh_after, cpu.regs[REG_L]);
+        assert_eq!(flags_before, cpu.regs[REG_F]);
     }
 
     #[test]
-    #[ignore = "INCS cant be performed, flags not modified"]
     fn test_dec_sp()
     {
         let mut cpu = Cpu::new();
-        todo!();
-        //INCS cant be performed, flags not modified
+        let flags_before = cpu.regs[REG_F];
+        cpu.sp = 0xABCD;
+        cpu.dec_sp();
+        assert_eq!(cpu.sp, 0xABCC);
+        assert_eq!(flags_before, cpu.regs[REG_F]);
     }
 
     #[test]
