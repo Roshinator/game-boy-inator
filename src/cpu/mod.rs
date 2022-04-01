@@ -2,6 +2,7 @@ mod ld_tests;
 mod control_tests;
 mod alu_tests;
 mod jump_branch_tests;
+mod bitwise_tests;
 use crate::ram::{self, Ram};
 
 type Reg = usize;
@@ -878,6 +879,8 @@ impl Cpu
         self.aux_write_flag(Flag::FLAG_H, false);
     }
 
+    //Note the different flag behavior preventing it from being merged into the r8 ver
+    //RLC REG_A and RLCA are both possible
     fn rlca(&mut self)
     {
         self.aux_write_flag(Flag::FLAG_C, (self.regs[REG_A] >> 7) & 1 != 0);
@@ -910,6 +913,8 @@ impl Cpu
         self.aux_write_flag(Flag::FLAG_H, false);
     }
 
+    //Note the different flag behavior preventing it from being merged into the r8 ver
+    //RRC REG_A and RRCA are both possible
     fn rrca(&mut self)
     {
         self.aux_write_flag(Flag::FLAG_C, self.regs[REG_A] & 1 != 0);
@@ -943,6 +948,8 @@ impl Cpu
         self.aux_write_flag(Flag::FLAG_H, false);
     }
 
+    //Note the different flag behavior preventing it from being merged into the r8 ver
+    //RL REG_A and RLA are both possible
     fn rla(&mut self)
     {
         let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
@@ -978,6 +985,8 @@ impl Cpu
         self.aux_write_flag(Flag::FLAG_H, false);
     }
 
+    //Note the different flag behavior preventing it from being merged into the r8 ver
+    //RR REG_A and RRA are both possible
     fn rra(&mut self)
     {
         let cin = self.aux_read_flag(Flag::FLAG_C) as u8;

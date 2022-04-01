@@ -320,4 +320,33 @@ mod alu_tests
         cpu.or_r8_r16a(&mut ram, REG_A, REG_B, REG_C);
         assert_eq!(cpu.regs[REG_F], 0b10000000);
     }
+
+    #[test]
+    fn test_cpl()
+    {
+        let mut cpu = Cpu::new();
+        cpu.regs[REG_A] = 0b10101010;
+        cpu.cpl();
+        assert_eq!(cpu.regs[REG_A], 0b01010101);
+        assert!(cpu.aux_read_flag(Flag::FLAG_H));
+        assert!(cpu.aux_read_flag(Flag::FLAG_N));
+    }
+
+    #[test]
+    fn test_ccf()
+    {
+        let mut cpu = Cpu::new();
+        cpu.regs[REG_F] = Flag::FLAG_C.bits;
+        cpu.ccf();
+        assert!(!cpu.aux_read_flag(Flag::FLAG_C));
+    }
+
+    #[test]
+    fn test_scf()
+    {
+        let mut cpu = Cpu::new();
+        cpu.regs[REG_F] = Flag::empty().bits;
+        cpu.scf();
+        assert!(cpu.aux_read_flag(Flag::FLAG_C));
+    }
 }
