@@ -328,25 +328,25 @@ mod alu_tests
         cpu.regs[REG_A] = 0b10101010;
         cpu.cpl();
         assert_eq!(cpu.regs[REG_A], 0b01010101);
-        assert!(cpu.aux_read_flag(Flag::FLAG_H));
-        assert!(cpu.aux_read_flag(Flag::FLAG_N));
+        assert!(cpu.aux_read_flag(CpuFlags::FLAG_H));
+        assert!(cpu.aux_read_flag(CpuFlags::FLAG_N));
     }
 
     #[test]
     fn test_ccf()
     {
         let mut cpu = Cpu::new();
-        cpu.regs[REG_F] = Flag::FLAG_C.bits;
+        cpu.regs[REG_F] = CpuFlags::FLAG_C.bits;
         cpu.ccf();
-        assert!(!cpu.aux_read_flag(Flag::FLAG_C));
+        assert!(!cpu.aux_read_flag(CpuFlags::FLAG_C));
     }
 
     #[test]
     fn test_scf()
     {
         let mut cpu = Cpu::new();
-        cpu.regs[REG_F] = Flag::empty().bits;
+        cpu.regs[REG_F] = CpuFlags::empty().bits;
         cpu.scf();
-        assert!(cpu.aux_read_flag(Flag::FLAG_C));
+        assert!(cpu.aux_read_flag(CpuFlags::FLAG_C));
     }
 }

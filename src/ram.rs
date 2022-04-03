@@ -38,7 +38,7 @@ pub const IF:u16 = 0xFF0F;
 pub const IE:u16 = 0xFFFF;
 
 //----Interrupt Bits----
-bitflags::bitflags! 
+bitflags::bitflags!
 {
     pub struct InterruptFlag: u8
     {
@@ -127,9 +127,19 @@ impl Ram
         }
     }
 
+    pub fn get_ref(&mut self, address: u16) -> &mut u8
+    {
+        &mut self.mem[address as usize]
+    }
+
     pub fn read_rp(&self, msh: u8, lsh: u8) -> u8
     {
         self.read(u16::from_le_bytes([lsh, msh]))
+    }
+
+    pub fn get_rp_ref(&mut self, msh: u8, lsh: u8) -> &mut u8
+    {
+        self.get_ref(u16::from_le_bytes([lsh, msh]))
     }
 
     pub fn execute(&mut self)

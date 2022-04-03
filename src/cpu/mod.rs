@@ -5,21 +5,11 @@ mod jump_branch_tests;
 mod bitwise_tests;
 use crate::ram::{self, Ram};
 
-type Reg = usize;
-const REG_A:Reg = 0;
-const REG_B:Reg = 1;
-const REG_C:Reg = 2;
-const REG_D:Reg = 3;
-const REG_E:Reg = 4;
-const REG_F:Reg = 5;
-const REG_H:Reg = 6;
-const REG_L:Reg = 7;
-
 //in an AF situation, A is msh, F is lsh, little endian
 
-bitflags::bitflags! 
+bitflags::bitflags!
 {
-    pub struct Flag: u8
+    pub struct CpuFlags: u8
     {
         const FLAG_Z = 1 << 7;
         const FLAG_N = 1 << 6;
@@ -75,7 +65,14 @@ pub struct ProgramCounter
 
 pub struct Cpu
 {
-    regs: [u8;8],
+    reg_a: u8,
+    reg_b: u8,
+    reg_c: u8,
+    reg_d: u8,
+    reg_e: u8,
+    reg_f: CpuFlags,
+    reg_h: u8,
+    reg_l: u8,
     sp: u16,
     pc: ProgramCounter,
     ime: bool,
@@ -89,7 +86,14 @@ impl Cpu
     {
         Cpu
         {
-            regs: [0x01, 0x00, 0x13, 0x00, 0xD8, 0xB0, 0x01, 0x4D],
+            reg_a: 0x01,
+            reg_b: 0x00,
+            reg_c: 0x13,
+            reg_d: 0x00,
+            reg_e: 0xD8,
+            reg_f: CpuFlags::from_bits(0xB0).unwrap(),
+            reg_h: 0x01,
+            reg_l: 0x4D,
             sp: 0xFFFE,
             pc: ProgramCounter
             {
@@ -107,23 +111,6 @@ impl Cpu
     //a suffix means parameter is an address (dereference)
     //i(num) is a signed value
 
-    fn aux_read_flag(&self, param: Flag) -> bool
-    {
-        (self.regs[REG_F] & param.bits) != 0
-    }
-
-    fn aux_write_flag(&mut self, param: Flag, data: bool)
-    {
-        if data
-        {
-            self.regs[REG_F] = self.regs[REG_F] | (param.bits);
-        }
-        else
-        {
-            self.regs[REG_F] = self.regs[REG_F] & (!param.bits);
-        }
-    }
-
     fn halt(&mut self)
     {
         self.halted = true;
@@ -135,576 +122,694 @@ impl Cpu
         self.stopped = true;
     }
 
-    fn ld_r16_16(&mut self, msh_reg: Reg, lsh_reg: Reg, msh_num: u8, lsh_num: u8)
+    fn ld_r16_16(msh_reg: &mut u8, lsh_reg: &mut u8, msh_num: u8, lsh_num: u8)
     {
-        self.regs[msh_reg] = msh_num;
-        self.regs[lsh_reg] = lsh_num;
+        *msh_reg = msh_num;
+        *lsh_reg = lsh_num;
     }
 
-    fn ld_hl_sp_plus(&mut self, p1: i8)
+    fn ld_hl_sp_plus(sp: &mut u16, reg_h: &mut u8, reg_l: &mut u8, p1: i8)
     {
         let conv = p1.unsigned_abs() as u16;
         let negative = p1 < 0;
         if negative
         {
-            let bytes = u16::to_le_bytes(self.sp - conv);
-            self.regs[REG_H] = bytes[1];
-            self.regs[REG_L] = bytes[0];
+            let bytes = u16::to_le_bytes(*sp - conv);
+            *reg_h = bytes[1];
+            *reg_l = bytes[0];
         }
         else
         {
-            let bytes = u16::to_le_bytes(self.sp + conv);
-            self.regs[REG_H] = bytes[1];
-            self.regs[REG_L] = bytes[0];
+            let bytes = u16::to_le_bytes(*sp + conv);
+            *reg_h = bytes[1];
+            *reg_l = bytes[0];
         }
     }
 
-    fn ld_sp_16(&mut self, msh_num: u8, lsh_num: u8)
+    fn ld_sp_16(sp: &mut u16, msh_num: u8, lsh_num: u8)
     {
-        self.sp = u16::from_le_bytes([lsh_num, msh_num]);
+        *sp = u16::from_le_bytes([lsh_num, msh_num]);
     }
 
-    fn ld_r8_8(&mut self, p1: Reg, p2: u8)
+    fn ld_r8_8(p1: &mut u8, p2: u8)
     {
-        self.regs[p1] = p2;
+        *p1 = p2;
     }
 
-    fn ld_r16a_8(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg, p2: u8)
+    fn ld_r16a_8(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, p2: u8)
     {
-        ram.write_rp(self.regs[msh], self.regs[lsh], p2);
+        ram.write_rp(*msh, *lsh, p2);
     }
 
-    fn ld_16a_r8(&mut self, ram: &mut Ram, msh: u8, lsh: u8, p2: Reg)
+    fn ld_16a_r8(ram: &mut Ram, msh: u8, lsh: u8, p2: &mut u8)
     {
-        ram.write_rp(msh, lsh, self.regs[p2]);
+        ram.write_rp(msh, lsh, *p2);
     }
 
-    fn ld_16a_sp(&mut self, ram: &mut Ram, msh: u8, lsh: u8)
+    fn ld_16a_sp(sp: &mut u16, ram: &mut Ram, msh: u8, lsh: u8)
     {
-        let bytes = self.sp.to_le_bytes();
+        let bytes = sp.to_le_bytes();
         ram.write_rp(msh, lsh, bytes[0]);
 
-        let result = self.aux_inc_16(msh, lsh);
+        let result = Cpu::aux_inc_16(msh, lsh);
         ram.write_rp(result.1, result.0, bytes[1]);
     }
 
-    fn ld_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn ld_r8_r8(p1: &mut u8, p2: &mut u8)
     {
-        self.regs[p1] = self.regs[p2];
+        *p1 = *p2;
     }
 
-    fn ld_sp_r16(&mut self, msh: Reg, lsh: Reg)
+    fn ld_r8_r8_s(p1: &mut u8)
     {
-        self.sp = u16::from_le_bytes([self.regs[lsh], self.regs[msh]]);
+        *p1 = *p1;
     }
 
-    fn ld_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn ld_sp_r16(sp: &mut u16, msh: &mut u8, lsh: &mut u8)
     {
-        let x = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.regs[p1] = x;
+        *sp = u16::from_le_bytes([*lsh, *msh]);
     }
 
-    fn ld_r8_16a(&mut self, ram: &mut Ram, p1: Reg, msh: u8, lsh: u8)
+    fn ld_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8)
+    {
+        let x = ram.read_rp(*msh, *lsh);
+        *p1 = x;
+    }
+
+    fn ld_r8_16a(ram: &mut Ram, p1: &mut u8, msh: u8, lsh: u8)
     {
         let x = ram.read_rp(msh, lsh);
-        self.regs[p1] = x;
+        *p1 = x;
     }
 
-    fn ld_r16a_r8(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg, p2: Reg)
+    fn ld_r16a_r8(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, p2: &mut u8)
     {
-        ram.write_rp(self.regs[msh], self.regs[lsh], self.regs[p2]);
+        ram.write_rp(*msh, *lsh, *p2);
     }
 
     // TODO: See if the flags are modified
 
     ///Returns (lsh, msh)
-    fn aux_inc_16(&mut self, msh: u8, lsh: u8) -> (u8, u8)
+    fn aux_inc_16(msh: u8, lsh: u8) -> (u8, u8)
     {
         let lsh_result = u8::overflowing_add(lsh, 1);
         let msh_result = u8::overflowing_add(msh, lsh_result.1 as u8);
         (lsh_result.0, msh_result.0)
     }
 
-    fn inc_r16(&mut self, msh: Reg, lsh: Reg)
+    fn inc_r16(msh: &mut u8, lsh: &mut u8)
     {
-        let lsh_result = u8::overflowing_add(self.regs[lsh], 1);
-        self.regs[lsh] = lsh_result.0;
-        let msh_result = u8::overflowing_add(self.regs[msh], lsh_result.1 as u8);
-        self.regs[msh] = msh_result.0;
+        let lsh_result = lsh.overflowing_add(1);
+        *lsh = lsh_result.0;
+        let msh_result = msh.overflowing_add(lsh_result.1 as u8);
+        *msh = msh_result.0;
     }
 
-    fn inc_sp(&mut self)
+    fn inc_sp(sp: &mut u16)
     {
-        let result = u16::overflowing_add(self.sp, 1);
-        self.sp = result.0;
+        let result = u16::overflowing_add(*sp, 1);
+        *sp = result.0;
     }
 
-    fn inc_r8(&mut self, reg: Reg)
+    fn inc_r8(reg: &mut u8, flags: &mut CpuFlags)
     {
-        let result = u8::overflowing_add(self.regs[reg], 1);
-        self.regs[reg] = result.0;
+        let result = reg.overflowing_add(1);
+        *reg = result.0;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, result.1);
     }
 
-    fn inc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn inc_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
         let result = ram.read_rp(
-            self.regs[msh], self.regs[lsh]).overflowing_add(1);
-        ram.write_rp(self.regs[msh], self.regs[lsh], result.0);
+            *msh, *lsh).overflowing_add(1);
+        ram.write_rp(*msh, *lsh, result.0);
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, result.1);
     }
 
-    fn dec_r8(&mut self, reg: Reg)
+    fn dec_r8(reg: &mut u8, flags: &mut CpuFlags)
     {
-        let result = u8::overflowing_sub(self.regs[reg], 1);
-        self.regs[reg] = result.0;
+        let result = reg.overflowing_sub(1);
+        *reg = result.0;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_H, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_H, result.1);
     }
 
-    fn dec_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn dec_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
         let result = ram.read_rp(
-            self.regs[msh], self.regs[lsh]).overflowing_sub(1);
-        ram.write_rp(self.regs[msh], self.regs[lsh], result.0);
+            *msh, *lsh).overflowing_sub(1);
+        ram.write_rp(*msh, *lsh, result.0);
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_H, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_H, result.1);
     }
 
-    fn dec_r16(&mut self, msh: Reg, lsh: Reg)
+    fn dec_r16(msh: &mut u8, lsh: &mut u8)
     {
-        let lsh_result = u8::overflowing_sub(self.regs[lsh], 1);
-        self.regs[lsh] = lsh_result.0;
-        let msh_result = u8::overflowing_sub(self.regs[msh], lsh_result.1 as u8);
-        self.regs[msh] = msh_result.0;
+        let lsh_result = lsh.overflowing_sub(1);
+        *lsh = lsh_result.0;
+        let msh_result = msh.overflowing_sub(lsh_result.1 as u8);
+        *msh = msh_result.0;
     }
 
-    fn dec_sp(&mut self)
+    fn dec_sp(sp: &mut u16)
     {
-        let result = u16::overflowing_sub(self.sp, 1);
-        self.sp = result.0;
+        let result = u16::overflowing_sub(*sp, 1);
+        *sp = result.0;
     }
 
-    fn add_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn add_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
-        let result = self.regs[p1].overflowing_add(self.regs[p2]);
-        self.regs[p1] = result.0;
+        let half_carry_pre = ((*p1 ^ *p2) >> 4) & 1;
+        let result = p1.overflowing_add(*p2);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn add_r8_8(&mut self, p1: Reg, p2: u8)
+    fn add_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result = self.regs[p1].overflowing_add(p2);
-        self.regs[p1] = result.0;
+        let half_carry_pre = ((*p1 ^ *p1) >> 4) & 1;
+        let result = p1.overflowing_add(*p1);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn add_r16_r16(&mut self, p1_msh: Reg, p1_lsh: Reg, p2_msh: Reg, p2_lsh: Reg)
+    fn add_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
-        let z = self.aux_read_flag(Flag::FLAG_Z);
-        self.add_r8_r8(p1_lsh, p2_lsh);
-        self.adc_r8_r8(p1_msh, p2_msh);
+        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
+        let result = p1.overflowing_add(p2);
+        *p1 = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, z);
-        self.aux_write_flag(Flag::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn add_r16_sp(&mut self, p1_msh: Reg, p1_lsh: Reg)
+    fn add_r16_r16(p1_msh: &mut u8, p1_lsh: &mut u8, p2_msh: &mut u8, p2_lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let z = self.aux_read_flag(Flag::FLAG_Z);
-        let reg = self.sp.to_le_bytes();
+        let z = flags.contains(CpuFlags::FLAG_Z);
+        Cpu::add_r8_r8(p1_lsh, p2_lsh, flags);
+        Cpu::adc_r8_r8(p1_msh, p2_msh, flags);
+
+        flags.set(CpuFlags::FLAG_Z, z);
+        flags.set(CpuFlags::FLAG_N, false);
+    }
+
+    fn add_r16_r16_s(p1_msh: &mut u8, p1_lsh: &mut u8, flags: &mut CpuFlags)
+    {
+        let z = flags.contains(CpuFlags::FLAG_Z);
+        Cpu::add_r8_r8_s(p1_lsh, flags);
+        Cpu::adc_r8_r8_s(p1_msh, flags);
+
+        flags.set(CpuFlags::FLAG_Z, z);
+        flags.set(CpuFlags::FLAG_N, false);
+    }
+
+    fn add_r16_sp(p1_msh: &mut u8, p1_lsh: &mut u8, sp: &mut u16, flags: &mut CpuFlags)
+    {
+        let z = flags.contains(CpuFlags::FLAG_Z);
+        let reg = sp.to_le_bytes();
 
         //ADD
-        let result = self.regs[p1_lsh].overflowing_add(reg[0]);
-        self.regs[p1_lsh] = result.0;
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        let result = p1_lsh.overflowing_add(reg[0]);
+        *p1_lsh = result.0;
+        flags.set(CpuFlags::FLAG_C, result.1);
 
         //ADC
-        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let half_carry_pre1 = ((self.regs[p1_msh] ^ reg[1]) >> 4) & 1;
-        let result1 = self.regs[p1_msh].overflowing_add(reg[1]);
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let half_carry_pre1 = ((*p1_msh ^ reg[1]) >> 4) & 1;
+        let result1 = p1_msh.overflowing_add(reg[1]);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_add(carry);
-        self.regs[p1_msh] = result2.0;
+        *p1_msh = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
-        self.aux_write_flag(Flag::FLAG_Z, z);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
+        flags.set(CpuFlags::FLAG_Z, z);
     }
 
-    fn add_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn add_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result = self.regs[p1].overflowing_add(p2);
-        self.regs[p1] = result.0;
+        let p2 = ram.read_rp(*msh, *lsh);
+        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
+        let result = p1.overflowing_add(p2);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre == half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre == half_carry_post);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn add_sp_i8(&mut self, p1: i8)
+    fn add_sp_i8(sp: &mut u16, p1: i8)
     {
         let conv = p1.unsigned_abs() as u16;
         let negative = p1 < 0;
         if negative
         {
-            self.sp -= conv;
+            *sp -= conv;
         }
         else
         {
-            self.sp += conv;
+            *sp += conv;
         }
     }
 
-    fn adc_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn adc_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
-        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let half_carry_pre1 = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
-        let result1 = self.regs[p1].overflowing_add(self.regs[p2]);
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let half_carry_pre1 = ((*p1 ^ *p2) >> 4) & 1;
+        let result1 = p1.overflowing_add(*p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_add(carry);
-        self.regs[p1] = result2.0;
+        *p1 = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
+        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
-    fn adc_r8_8(&mut self, p1: Reg, p2: u8)
+    fn adc_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result1 = self.regs[p1].overflowing_add(p2);
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let half_carry_pre1 = ((*p1 ^ *p1) >> 4) & 1;
+        let result1 = p1.overflowing_add(*p1);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_add(carry);
-        self.regs[p1] = result2.0;
+        *p1 = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
+        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
-    fn adc_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn adc_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
-        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result1 = self.regs[p1].overflowing_add(p2);
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let half_carry_pre1 = ((*p1 ^ p2) >> 4) & 1;
+        let result1 = p1.overflowing_add(p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_add(carry);
-        self.regs[p1] = result2.0;
+        *p1 = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
+        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
+    }
+
+    fn adc_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
+    {
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let p2 = ram.read_rp(*msh, *lsh);
+        let half_carry_pre1 = ((*p1 ^ p2) >> 4) & 1;
+        let result1 = p1.overflowing_add(p2);
+        let half_carry_post1 = (result1.0 >> 4) & 1;
+        let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
+        let result2 = result1.0.overflowing_add(carry);
+        *p1 = result2.0;
+        let half_carry_post2 = (result2.0 >> 4) & 1;
+
+        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
     //TODO: Check subtraction half carry calculations
-    fn sub_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn sub_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
-        let result = self.regs[p1].overflowing_sub(self.regs[p2]);
-        self.regs[p1] = result.0;
+        let half_carry_pre = ((*p1 ^ *p2) >> 4) & 1;
+        let result = p1.overflowing_sub(*p2);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn sub_r8_8(&mut self, p1: Reg, p2: u8)
+    fn sub_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result = self.regs[p1].overflowing_sub(p2);
-        self.regs[p1] = result.0;
+        let half_carry_pre = ((*p1 ^ *p1) >> 4) & 1;
+        let result = p1.overflowing_sub(*p1);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn sub_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn sub_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
-        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result = self.regs[p1].overflowing_add(p2);
-        self.regs[p1] = result.0;
+        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
+        let result = p1.overflowing_sub(p2);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn sbc_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn sub_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let half_carry_pre1 = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
-        let result1 = self.regs[p1].overflowing_sub(self.regs[p2]);
+        let p2 = ram.read_rp(*msh, *lsh);
+        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
+        let result = p1.overflowing_add(p2);
+        *p1 = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
+
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result.1);
+    }
+
+    fn sbc_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
+    {
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let half_carry_pre1 = ((*p1 ^ *p2) >> 4) & 1;
+        let result1 = p1.overflowing_sub(*p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_sub(carry);
-        self.regs[p1] = result2.0;
+        *p1 = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
+        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
-    fn sbc_r8_8(&mut self, p1: Reg, p2: u8)
+    fn sbc_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result1 = self.regs[p1].overflowing_sub(p2);
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let half_carry_pre1 = ((*p1 ^ *p1) >> 4) & 1;
+        let result1 = p1.overflowing_sub(*p1);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_sub(carry);
-        self.regs[p1] = result2.0;
+        *p1 = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
+        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
-    fn sbc_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn sbc_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
-        let carry = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        let half_carry_pre1 = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result1 = self.regs[p1].overflowing_sub(p2);
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let half_carry_pre1 = ((*p1 ^ p2) >> 4) & 1;
+        let result1 = p1.overflowing_sub(p2);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
         let result2 = result1.0.overflowing_sub(carry);
-        self.regs[p1] = result2.0;
+        *p1 = result2.0;
         let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result2.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result1.1 || result2.1);
+        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
-    fn and_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn sbc_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] &= self.regs[p2];
+        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
+        let p2 = ram.read_rp(*msh, *lsh);
+        let half_carry_pre1 = ((*p1 ^ p2) >> 4) & 1;
+        let result1 = p1.overflowing_sub(p2);
+        let half_carry_post1 = (result1.0 >> 4) & 1;
+        let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
+        let result2 = result1.0.overflowing_sub(carry);
+        *p1 = result2.0;
+        let half_carry_post2 = (result2.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, true);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
-    fn and_r8_8(&mut self, p1: Reg, p2: u8)
+    fn and_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] &= p2;
+        *p1 &= *p2;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, true);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, true);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn and_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn and_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] &= ram.read_rp(self.regs[msh], self.regs[lsh]);
+        *p1 &= *p1;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, true);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, true);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn xor_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn and_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] ^= self.regs[p2];
+        *p1 &= p2;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, true);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn xor_r8_8(&mut self, p1: Reg, p2: u8)
+    fn and_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] ^= p2;
+        *p1 &= ram.read_rp(*msh, *lsh);
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, true);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn xor_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn xor_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] ^= ram.read_rp(self.regs[msh], self.regs[lsh]);
+        *p1 ^= *p2;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn or_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn xor_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] |= self.regs[p2];
+        *p1 ^= *p1;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn or_r8_8(&mut self, p1: Reg, p2: u8)
+    fn xor_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] |= p2;
+        *p1 ^= p2;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn or_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn xor_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        self.regs[p1] |= ram.read_rp(self.regs[msh], self.regs[lsh]);
+        *p1 ^= ram.read_rp(*msh, *lsh);
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_H, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_C, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn cp_r8_r8(&mut self, p1: Reg, p2: Reg)
+    fn or_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((self.regs[p1] ^ self.regs[p2]) >> 4) & 1;
-        let result = self.regs[p1].overflowing_sub(self.regs[p2]);
-        self.regs[p1] = result.0;
+        *p1 |= *p2;
+
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
+    }
+
+    fn or_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
+    {
+        *p1 |= *p1;
+
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
+    }
+
+    fn or_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
+    {
+        *p1 |= p2;
+
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
+    }
+
+    fn or_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
+    {
+        *p1 |= ram.read_rp(*msh, *lsh);
+
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_C, false);
+    }
+
+    fn cp_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
+    {
+        let half_carry_pre = ((*p1 ^ *p2) >> 4) & 1;
+        let result = p1.overflowing_sub(*p2);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn cp_r8_8(&mut self, p1: Reg, p2: u8)
+    fn cp_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result = self.regs[p1].overflowing_sub(p2);
-        self.regs[p1] = result.0;
+        let half_carry_pre = ((*p1 ^ *p1) >> 4) & 1;
+        let result = p1.overflowing_sub(*p1);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn cp_r8_r16a(&mut self, ram: &mut Ram, p1: Reg, msh: Reg, lsh: Reg)
+    fn cp_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
-        let p2 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        let half_carry_pre = ((self.regs[p1] ^ p2) >> 4) & 1;
-        let result = self.regs[p1].overflowing_add(p2);
-        self.regs[p1] = result.0;
+        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
+        let result = p1.overflowing_sub(p2);
+        *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
-        self.aux_write_flag(Flag::FLAG_Z, result.0 == 0);
-        self.aux_write_flag(Flag::FLAG_H, half_carry_pre != half_carry_post);
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_C, result.1);
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result.1);
     }
 
-    fn daa(&mut self)
+    fn cp_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let c_before = self.aux_read_flag(Flag::FLAG_C);
-        let bits_47 = (self.regs[REG_A] >> 4) & 0b00001111;
-        let h_before = self.aux_read_flag(Flag::FLAG_H);
-        let bits_03 = self.regs[REG_A] & 0b00001111;
-        if self.aux_read_flag(Flag::FLAG_N) == true //Add preceded instruction
+        let p2 = ram.read_rp(*msh, *lsh);
+        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
+        let result = p1.overflowing_add(p2);
+        *p1 = result.0;
+        let half_carry_post = (result.0 >> 4) & 1;
+
+        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_C, result.1);
+    }
+
+    fn daa(reg_a: &mut u8, flags: &mut CpuFlags)
+    {
+        let c_before = flags.contains(CpuFlags::FLAG_C);
+        let bits_47 = (*reg_a >> 4) & 0b00001111;
+        let h_before = flags.contains(CpuFlags::FLAG_H);
+        let bits_03 = *reg_a & 0b00001111;
+        if flags.contains(CpuFlags::FLAG_N) == true //Add preceded instruction
         {
             match (c_before, bits_47, h_before, bits_03)
             {
                 (false, 0x0..=0x9, false, 0x0..=0x9) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x00);
-                    self.aux_write_flag(Flag::FLAG_C, false);
+                    *reg_a = reg_a.wrapping_add(0x00);
+                    flags.set(CpuFlags::FLAG_C, false);
                 },
                 (false, 0x0..=0x8, false, 0xA..=0xF) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x06);
-                    self.aux_write_flag(Flag::FLAG_C, false);
+                    *reg_a = reg_a.wrapping_add(0x06);
+                    flags.set(CpuFlags::FLAG_C, false);
                 },
                 (false, 0x0..=0x9, true, 0x0..=0x3) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x06);
-                    self.aux_write_flag(Flag::FLAG_C, false);
+                    *reg_a = reg_a.wrapping_add(0x06);
+                    flags.set(CpuFlags::FLAG_C, false);
                 },
                 (false, 0xA..=0xF, false, 0x0..=0x9) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x60);
-                    self.aux_write_flag(Flag::FLAG_C, true);
+                    *reg_a = reg_a.wrapping_add(0x60);
+                    flags.set(CpuFlags::FLAG_C, true);
                 },
                 (false, 0x9..=0xF, false, 0xA..=0xF) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
-                    self.aux_write_flag(Flag::FLAG_C, true);
+                    *reg_a = reg_a.wrapping_add(0x66);
+                    flags.set(CpuFlags::FLAG_C, true);
                 },
                 (false, 0xA..=0xF, true, 0x0..=0x3) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
-                    self.aux_write_flag(Flag::FLAG_C, true);
+                    *reg_a = reg_a.wrapping_add(0x66);
+                    flags.set(CpuFlags::FLAG_C, true);
                 },
                 (true, 0x0..=0x2, false, 0x0..=0x9) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x60);
-                    self.aux_write_flag(Flag::FLAG_C, true);
+                    *reg_a = reg_a.wrapping_add(0x60);
+                    flags.set(CpuFlags::FLAG_C, true);
                 },
                 (true, 0x0..=0x2, false, 0xA..=0xF) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
-                    self.aux_write_flag(Flag::FLAG_C, true);
+                    *reg_a = reg_a.wrapping_add(0x66);
+                    flags.set(CpuFlags::FLAG_C, true);
                 },
                 (true, 0x0..=0x3, true, 0x0..=0x3) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x66);
-                    self.aux_write_flag(Flag::FLAG_C, true);
+                    *reg_a = reg_a.wrapping_add(0x66);
+                    flags.set(CpuFlags::FLAG_C, true);
                 },
                 _ => panic!("Invalid BDC conversion")
             }
@@ -714,463 +819,463 @@ impl Cpu
             match (c_before, bits_47, h_before, bits_03)
             {
                 (false, 0x0..=0x9, false, 0x0..=0x9) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x00);
-                    self.aux_write_flag(Flag::FLAG_C, false);
+                    *reg_a = reg_a.wrapping_add(0x00);
+                    flags.set(CpuFlags::FLAG_C, false);
                 },
                 (false, 0x0..=0x8, true, 0x6..=0xF) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0xFA);
-                    self.aux_write_flag(Flag::FLAG_C, false);
+                    *reg_a = reg_a.wrapping_add(0xFA);
+                    flags.set(CpuFlags::FLAG_C, false);
                 },
                 (true, 0x7..=0xF, false, 0x0..=0x9) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0xA0);
-                    self.aux_write_flag(Flag::FLAG_C, true);
+                    *reg_a = reg_a.wrapping_add(0xA0);
+                    flags.set(CpuFlags::FLAG_C, true);
                 },
                 (true, 0x6..=0xF, true, 0x6..=0xF) => {
-                    self.regs[REG_A] = self.regs[REG_A].wrapping_add(0x9A);
-                    self.aux_write_flag(Flag::FLAG_C, true);
+                    *reg_a = reg_a.wrapping_add(0x9A);
+                    flags.set(CpuFlags::FLAG_C, true);
                 },
                 _ => panic!("Invalid BDC conversion")
             }
         }
     }
 
-    fn cpl(&mut self)
+    fn cpl(reg_a: &mut u8, flags: &mut CpuFlags)
     {
-        self.regs[REG_A] = !self.regs[REG_A];
-        self.aux_write_flag(Flag::FLAG_N, true);
-        self.aux_write_flag(Flag::FLAG_H, true);
+        *reg_a = !*reg_a;
+        flags.set(CpuFlags::FLAG_N, true);
+        flags.set(CpuFlags::FLAG_H, true);
     }
 
-    fn ccf(&mut self)
+    fn ccf(flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, !self.aux_read_flag(Flag::FLAG_C));
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_C, !flags.contains(CpuFlags::FLAG_C));
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn scf(&mut self)
+    fn scf(flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, true);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_C, true);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn jp_pc_16(&mut self, msh: u8, lsh: u8)
+    fn jp_pc_16(pc: &mut ProgramCounter, msh: u8, lsh: u8)
     {
-        self.pc.reg = u16::from_le_bytes([lsh, msh]);
-        self.pc.should_increment = false;
+        pc.reg = u16::from_le_bytes([lsh, msh]);
+        pc.should_increment = false;
     }
 
-    fn jp_flag_pc_16(&mut self, flag: Flag, msh: u8, lsh: u8)
+    fn jp_flag_pc_16(pc: &mut ProgramCounter, flag: CpuFlags, msh: u8, lsh: u8, flags: &mut CpuFlags)
     {
-        if self.aux_read_flag(flag) == true
+        if flags.contains(flag) == true
         {
-            self.jp_pc_16(msh, lsh);
+            Cpu::jp_pc_16(pc, msh, lsh);
         }
     }
 
-    fn jp_nflag_pc_16(&mut self, flag: Flag, msh: u8, lsh: u8)
+    fn jp_nflag_pc_16(pc: &mut ProgramCounter, flag: CpuFlags, msh: u8, lsh: u8, flags: &mut CpuFlags)
     {
-        if self.aux_read_flag(flag) == false
+        if flags.contains(flag) == false
         {
-            self.jp_pc_16(msh, lsh);
+            Cpu::jp_pc_16(pc, msh, lsh);
         }
     }
 
-    fn jr_i8(&mut self, p1: i8)
+    fn jr_i8(pc: &mut ProgramCounter, p1: i8)
     {
         let conv = p1.unsigned_abs() as u16;
         let negative = p1 < 0;
         if negative
         {
-            self.pc.reg -= conv;
+            pc.reg -= conv;
         }
         else
         {
-            self.pc.reg += conv;
+            pc.reg += conv;
         }
-        self.pc.should_increment = false;
+        pc.should_increment = false;
     }
 
-    fn jr_flag_i8(&mut self, flag: Flag, p1: i8)
+    fn jr_flag_i8(pc: &mut ProgramCounter, flag: CpuFlags, p1: i8, flags: &mut CpuFlags)
     {
-        if self.aux_read_flag(flag) == true
+        if flags.contains(flag) == true
         {
-            self.jr_i8(p1);
+            Cpu::jr_i8(pc, p1);
         }
     }
 
-    fn jr_nflag_i8(&mut self, flag: Flag, p1: i8)
+    fn jr_nflag_i8(pc: &mut ProgramCounter, flag: CpuFlags, p1: i8, flags: &mut CpuFlags)
     {
-        if self.aux_read_flag(flag) == false
+        if flags.contains(flag) == false
         {
-            self.jr_i8(p1);
+            Cpu::jr_i8(pc, p1);
         }
     }
 
-    fn call_16(&mut self, ram: &mut Ram, msh: u8, lsh: u8)
+    fn call_16(ram: &mut Ram, msh: u8, lsh: u8, pc: &mut ProgramCounter, sp: &mut u16)
     {
-        let pc_bytes = self.pc.reg.to_le_bytes();
-        ram.write(self.sp - 1, pc_bytes[1]);
-        ram.write(self.sp - 2, pc_bytes[0]);
-        self.pc.reg = u16::from_le_bytes([lsh, msh]);
-        self.sp -= 2;
+        let pc_bytes = pc.reg.to_le_bytes();
+        ram.write(*sp - 1, pc_bytes[1]);
+        ram.write(*sp - 2, pc_bytes[0]);
+        pc.reg = u16::from_le_bytes([lsh, msh]);
+        *sp -= 2;
     }
 
-    fn call_flag_16(&mut self, ram: &mut Ram, flag: Flag, msh: u8, lsh: u8)
+    fn call_flag_16(ram: &mut Ram, flag: CpuFlags, msh: u8, lsh: u8, pc: &mut ProgramCounter, sp: &mut u16, flags: &mut CpuFlags)
     {
-        if self.aux_read_flag(flag) == true
+        if flags.contains(flag) == true
         {
-            self.call_16(ram, msh, lsh);
+            Cpu::call_16(ram, msh, lsh, pc, sp);
         }
     }
 
-    fn call_nflag_16(&mut self, ram: &mut Ram, flag: Flag, msh: u8, lsh: u8)
+    fn call_nflag_16(ram: &mut Ram, flag: CpuFlags, msh: u8, lsh: u8, pc: &mut ProgramCounter, sp: &mut u16, flags: &mut CpuFlags)
     {
-        if self.aux_read_flag(flag) == false
+        if flags.contains(flag) == false
         {
-            self.call_16(ram, msh, lsh);
+            Cpu::call_16(ram, msh, lsh, pc, sp);
         }
     }
 
-    fn ret(&mut self, ram: &mut Ram)
+    fn ret(ram: &mut Ram, pc: &mut ProgramCounter, sp: &mut u16)
     {
-        let sp_lsh = ram.read(self.sp);
-        let sp_msh = ram.read(self.sp + 1);
-        self.pc.reg = u16::from_le_bytes([sp_lsh, sp_msh]);
-        self.sp += 2;
+        let sp_lsh = ram.read(*sp);
+        let sp_msh = ram.read(*sp + 1);
+        pc.reg = u16::from_le_bytes([sp_lsh, sp_msh]);
+        *sp += 2;
     }
 
-    fn ret_flag(&mut self, ram: &mut Ram, flag: Flag)
+    fn ret_flag(ram: &mut Ram, pc: &mut ProgramCounter, sp: &mut u16, flag: CpuFlags, flags: &mut CpuFlags)
     {
-        if self.aux_read_flag(flag) == true
+        if flags.contains(flag) == true
         {
-            self.ret(ram);
+            Cpu::ret(ram, pc, sp);
         }
     }
 
-    fn ret_nflag(&mut self, ram: &mut Ram, flag: Flag)
+    fn ret_nflag(ram: &mut Ram, pc: &mut ProgramCounter, sp: &mut u16, flag: CpuFlags, flags: &mut CpuFlags)
     {
-        if self.aux_read_flag(flag) == false
+        if flags.contains(flag) == false
         {
-            self.ret(ram);
+            Cpu::ret(ram, pc, sp);
         }
     }
 
-    fn rst(&mut self, ram: &mut Ram, loc: u8)
+    fn rst(ram: &mut Ram, loc: u8, pc: &mut ProgramCounter, sp: &mut u16)
     {
-        let pc_bytes = self.pc.reg.to_le_bytes();
-        ram.write(self.sp - 1, pc_bytes[1]);
-        ram.write(self.sp - 2, pc_bytes[0]);
-        self.sp -= 2;
-        self.pc.reg = u16::from_le_bytes([loc, 0]);
+        let pc_bytes = pc.reg.to_le_bytes();
+        ram.write(*sp - 1, pc_bytes[1]);
+        ram.write(*sp - 2, pc_bytes[0]);
+        *sp -= 2;
+        pc.reg = u16::from_le_bytes([loc, 0]);
     }
 
 
     //--------------------16 BIT OPCODES--------------------
 
-    fn rlc_r8(&mut self, p1: Reg)
+    fn rlc_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
-        self.regs[p1] = self.regs[p1].rotate_left(1);
+        flags.set(CpuFlags::FLAG_C, (*p1 >> 7) & 1 != 0);
+        *p1 = p1.rotate_left(1);
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
     //Note the different flag behavior preventing it from being merged into the r8 ver
-    //RLC REG_A and RLCA are both possible
-    fn rlca(&mut self)
+    //RLC &self.reg_a and RLCA are both possible
+    fn rlca(reg_a: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, (self.regs[REG_A] >> 7) & 1 != 0);
-        self.regs[REG_A] = self.regs[REG_A].rotate_left(1);
+        flags.set(CpuFlags::FLAG_C, (*reg_a >> 7) & 1 != 0);
+        *reg_a = reg_a.rotate_left(1);
 
-        self.aux_write_flag(Flag::FLAG_Z, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rlc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn rlc_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(Flag::FLAG_C, (p1 >> 7) & 1 != 0);
+        let p1 = ram.read_rp(*msh, *lsh);
+        flags.set(CpuFlags::FLAG_C, (p1 >> 7) & 1 != 0);
         let result = p1.rotate_left(1);
-        ram.write_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(*msh, *lsh, result);
 
-        self.aux_write_flag(Flag::FLAG_Z, result == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, result == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rrc_r8(&mut self, p1: Reg)
+    fn rrc_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, self.regs[p1] & 1 != 0);
-        self.regs[p1] = self.regs[p1].rotate_right(1);
+        flags.set(CpuFlags::FLAG_C, *p1 & 1 != 0);
+        *p1 = p1.rotate_right(1);
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
     //Note the different flag behavior preventing it from being merged into the r8 ver
-    //RRC REG_A and RRCA are both possible
-    fn rrca(&mut self)
+    //RRC &self.reg_a and RRCA are both possible
+    fn rrca(reg_a: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, self.regs[REG_A] & 1 != 0);
-        self.regs[REG_A] = self.regs[REG_A].rotate_right(1);
+        flags.set(CpuFlags::FLAG_C, *reg_a & 1 != 0);
+        *reg_a = reg_a.rotate_right(1);
 
-        self.aux_write_flag(Flag::FLAG_Z, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rrc_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn rrc_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(Flag::FLAG_C, p1 & 1 != 0);
+        let p1 = ram.read_rp(*msh, *lsh);
+        flags.set(CpuFlags::FLAG_C, p1 & 1 != 0);
         let result = p1.rotate_right(1);
-        ram.write_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(*msh, *lsh, result);
 
-        self.aux_write_flag(Flag::FLAG_Z, result == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, result == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rl_r8(&mut self, p1: Reg)
+    fn rl_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
-        self.aux_write_flag(Flag::FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
-        self.regs[p1] = (self.regs[p1] << 1u8) | cin;
+        let cin = flags.contains(CpuFlags::FLAG_C) as u8;
+        flags.set(CpuFlags::FLAG_C, (*p1 >> 7) & 1 != 0);
+        *p1 = (*p1 << 1u8) | cin;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
     //Note the different flag behavior preventing it from being merged into the r8 ver
-    //RL REG_A and RLA are both possible
-    fn rla(&mut self)
+    //RL &self.reg_a and RLA are both possible
+    fn rla(reg_a: &mut u8, flags: &mut CpuFlags)
     {
-        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
-        self.aux_write_flag(Flag::FLAG_C, (self.regs[REG_A] >> 7) & 1 != 0);
-        self.regs[REG_A] = (self.regs[REG_A] << 1u8) | cin;
+        let cin = flags.contains(CpuFlags::FLAG_C) as u8;
+        flags.set(CpuFlags::FLAG_C, (*reg_a >> 7) & 1 != 0);
+        *reg_a = (*reg_a << 1u8) | cin;
 
-        self.aux_write_flag(Flag::FLAG_Z, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rl_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn rl_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(Flag::FLAG_C, (p1 >> 7) & 1 != 0);
+        let cin = flags.contains(CpuFlags::FLAG_C) as u8;
+        let p1 = ram.read_rp(*msh, *lsh);
+        flags.set(CpuFlags::FLAG_C, (p1 >> 7) & 1 != 0);
         let result = (p1 << 1u8) | cin;
-        ram.write_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(*msh, *lsh, result);
 
-        self.aux_write_flag(Flag::FLAG_Z, result == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, result == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rr_r8(&mut self, p1: Reg)
+    fn rr_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
-        self.aux_write_flag(Flag::FLAG_C, self.regs[p1] & 1 != 0);
-        self.regs[p1] = (self.regs[p1] >> 1u8) | (cin << 7u8);
+        let cin = flags.contains(CpuFlags::FLAG_C) as u8;
+        flags.set(CpuFlags::FLAG_C, *p1 & 1 != 0);
+        *p1 = (*p1 >> 1u8) | (cin << 7u8);
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
     //Note the different flag behavior preventing it from being merged into the r8 ver
-    //RR REG_A and RRA are both possible
-    fn rra(&mut self)
+    //RR &self.reg_a and RRA are both possible
+    fn rra(reg_a: &mut u8, flags: &mut CpuFlags)
     {
-        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
-        self.aux_write_flag(Flag::FLAG_C, self.regs[REG_A] & 1 != 0);
-        self.regs[REG_A] = (self.regs[REG_A] >> 1u8) | (cin << 7u8);
+        let cin = flags.contains(CpuFlags::FLAG_C) as u8;
+        flags.set(CpuFlags::FLAG_C, *reg_a & 1 != 0);
+        *reg_a = (*reg_a >> 1u8) | (cin << 7u8);
 
-        self.aux_write_flag(Flag::FLAG_Z, false);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, false);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rr_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn rr_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let cin = self.aux_read_flag(Flag::FLAG_C) as u8;
-        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(Flag::FLAG_C, p1 & 1 != 0);
+        let cin = flags.contains(CpuFlags::FLAG_C) as u8;
+        let p1 = ram.read_rp(*msh, *lsh);
+        flags.set(CpuFlags::FLAG_C, p1 & 1 != 0);
         let result = (p1 >> 1u8) | (cin << 7u8);
-        ram.write_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(*msh, *lsh, result);
 
-        self.aux_write_flag(Flag::FLAG_Z, result == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, result == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn sla_r8(&mut self, p1: Reg)
+    fn sla_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, (self.regs[p1] >> 7) & 1 != 0);
-        self.regs[p1] <<= 1u8;
+        flags.set(CpuFlags::FLAG_C, (*p1 >> 7) & 1 != 0);
+        *p1 <<= 1u8;
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn sla_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn sla_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(Flag::FLAG_C, (p1 >> 7) & 1 != 0);
+        let p1 = ram.read_rp(*msh, *lsh);
+        flags.set(CpuFlags::FLAG_C, (p1 >> 7) & 1 != 0);
         let result = p1 << 1u8;
-        ram.write_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(*msh, *lsh, result);
 
-        self.aux_write_flag(Flag::FLAG_Z, result == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, result == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn sra_r8(&mut self, p1: Reg)
+    fn sra_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, self.regs[p1] & 1 != 0);
-        self.regs[p1] = (self.regs[p1] >> 1u8) | (self.regs[p1] & 0b10000000u8); //fill with leftmost
+        flags.set(CpuFlags::FLAG_C, *p1 & 1 != 0);
+        *p1 = (*p1 >> 1u8) | (*p1 & 0b10000000u8); //fill with leftmost
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn sra_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn sra_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(Flag::FLAG_C, p1 & 1 != 0);
+        let p1 = ram.read_rp(*msh, *lsh);
+        flags.set(CpuFlags::FLAG_C, p1 & 1 != 0);
         let result =( p1 >> 1u8) | (p1 | 0b10000000u8);
-        ram.write_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(*msh, *lsh, result);
 
-        self.aux_write_flag(Flag::FLAG_Z, result == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, result == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn srl_r8(&mut self, p1: Reg)
+    fn srl_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_C, self.regs[p1] & 1 != 0);
-        self.regs[p1] >>= 1u8; //fill with leftmost
+        flags.set(CpuFlags::FLAG_C, *p1 & 1 != 0);
+        *p1 >>= 1u8; //fill with leftmost
 
-        self.aux_write_flag(Flag::FLAG_Z, self.regs[p1] == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn srl_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn srl_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
-        self.aux_write_flag(Flag::FLAG_C, p1 & 1 != 0);
+        let p1 = ram.read_rp(*msh, *lsh);
+        flags.set(CpuFlags::FLAG_C, p1 & 1 != 0);
         let result = p1 >> 1u8;
-        ram.write_rp(self.regs[msh], self.regs[lsh], result);
+        ram.write_rp(*msh, *lsh, result);
 
-        self.aux_write_flag(Flag::FLAG_Z, result == 0);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_H, false);
+        flags.set(CpuFlags::FLAG_Z, result == 0);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn swap_r8(&mut self, p1: Reg)
+    fn swap_r8(p1: &mut u8)
     {
-        let lower_to_upper_half = self.regs[p1] << 4u8;
-        let upper_to_lower_half = self.regs[p1] >> 4u8;
-        self.regs[p1] = lower_to_upper_half | upper_to_lower_half;
+        let lower_to_upper_half = *p1 << 4u8;
+        let upper_to_lower_half = *p1 >> 4u8;
+        *p1 = lower_to_upper_half | upper_to_lower_half;
     }
 
-    fn swap_r16a(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn swap_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8)
     {
-        let p1 = ram.read_rp(self.regs[msh], self.regs[lsh]);
+        let p1 = ram.read_rp(*msh, *lsh);
         let lower_to_upper_half = p1 << 4u8;
         let upper_to_lower_half = p1 >> 4u8;
-        ram.write_rp(self.regs[msh], self.regs[lsh], lower_to_upper_half | upper_to_lower_half);
+        ram.write_rp(*msh, *lsh, lower_to_upper_half | upper_to_lower_half);
     }
 
-    fn bit_r8(&mut self, p1: u8, p2: Reg)
+    fn bit_r8(p1: u8, p2: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_H, true);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_Z, (self.regs[p2] & (1u8 << p1)) == 0);
+        flags.set(CpuFlags::FLAG_H, true);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_Z, (*p2 & (1u8 << p1)) == 0);
     }
 
-    fn bit_r16a(&mut self, ram: &mut Ram, p1: u8, msh: Reg, lsh: Reg)
+    fn bit_r16a(ram: &mut Ram, p1: u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
     {
-        self.aux_write_flag(Flag::FLAG_H, true);
-        self.aux_write_flag(Flag::FLAG_N, false);
-        self.aux_write_flag(Flag::FLAG_Z,
-            (ram.read_rp(self.regs[msh], self.regs[lsh]) & (1u8 << p1)) == 0);
+        flags.set(CpuFlags::FLAG_H, true);
+        flags.set(CpuFlags::FLAG_N, false);
+        flags.set(CpuFlags::FLAG_Z,
+            (ram.read_rp(*msh, *lsh) & (1u8 << p1)) == 0);
     }
 
-    fn res_r8(&mut self, p1: u8, p2: Reg)
+    fn res_r8(p1: u8, p2: &mut u8)
     {
-        self.regs[p2] &= !(1u8 << p1);
+        *p2 &= !(1u8 << p1);
     }
 
-    fn res_r16a(&mut self, ram: &mut Ram, p1: u8, msh: Reg, lsh: Reg)
+    fn res_r16a(ram: &mut Ram, p1: u8, msh: &mut u8, lsh: &mut u8)
     {
-        ram.write_rp(self.regs[msh], self.regs[lsh],
-            ram.read_rp(self.regs[msh], self.regs[lsh]) & (!(1u8 << p1)));
+        ram.write_rp(*msh, *lsh,
+            ram.read_rp(*msh, *lsh) & (!(1u8 << p1)));
     }
 
-    fn set_r8(&mut self, p1: u8, p2: Reg)
+    fn set_r8(p1: u8, p2: &mut u8)
     {
-        self.regs[p2] |= 1u8 << p1;
+        *p2 |= 1u8 << p1;
     }
 
-    fn set_r16a(&mut self, ram: &mut Ram, p1: u8, msh: Reg, lsh: Reg)
+    fn set_r16a(ram: &mut Ram, p1: u8, msh: &mut u8, lsh: &mut u8)
     {
-        ram.write_rp(self.regs[msh], self.regs[lsh],
-            ram.read_rp(self.regs[msh], self.regs[lsh]) | (1u8 << p1));
+        ram.write_rp(*msh, *lsh,
+            ram.read_rp(*msh, *lsh) | (1u8 << p1));
     }
 
-    fn push_r16(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn push_r16(ram: &mut Ram, sp: &mut u16, msh: &mut u8, lsh: &mut u8)
     {
-        ram.write(self.sp - 1, self.regs[msh]);
-        ram.write(self.sp - 2, self.regs[lsh]);
-        self.sp -= 2;
+        ram.write(*sp - 1, *msh);
+        ram.write(*sp - 2, *lsh);
+        *sp -= 2;
     }
 
-    fn push_pc(&mut self, ram: &mut Ram)
+    fn push_pc(ram: &mut Ram, sp: &mut u16, pc: &mut ProgramCounter)
     {
-        let bytes = self.pc.reg.to_le_bytes();
-        ram.write(self.sp - 1, bytes[1]);
-        ram.write(self.sp - 2, bytes[0]);
-        self.sp -= 2;
+        let bytes = pc.reg.to_le_bytes();
+        ram.write(*sp - 1, bytes[1]);
+        ram.write(*sp - 2, bytes[0]);
+        *sp -= 2;
     }
 
-    fn pop_r16(&mut self, ram: &mut Ram, msh: Reg, lsh: Reg)
+    fn pop_r16(ram: &mut Ram, sp: &mut u16, msh: &mut u8, lsh: &mut u8)
     {
-        self.regs[lsh] = ram.read(self.sp);
-        self.regs[msh] = ram.read(self.sp + 1);
-        self.sp += 2;
+        *lsh = ram.read(*sp);
+        *msh = ram.read(*sp + 1);
+        *sp += 2;
     }
 
     //----------INTERRUPT MANAGEMENT----------
 
-    fn reti(&mut self, ram: &mut Ram)
+    fn reti(ram: &mut Ram, sp: &mut u16, pc: &mut ProgramCounter, ime: &mut bool)
     {
-        let l_bytes = ram.read(self.sp);
-        self.inc_sp();
-        let h_bytes = ram.read(self.sp);
-        self.inc_sp();
-        self.pc.reg = u16::from_le_bytes([l_bytes, h_bytes]);
-        self.ime = true;
+        let l_bytes = ram.read(*sp);
+        Cpu::inc_sp(sp);
+        let h_bytes = ram.read(*sp);
+        Cpu::inc_sp(sp);
+        pc.reg = u16::from_le_bytes([l_bytes, h_bytes]);
+        *ime = true;
     }
 
-    fn ei(&mut self)
+    fn ei(ime: &mut bool)
     {
-        self.ime = true;
+        *ime = true;
     }
 
-    fn di(&mut self)
+    fn di(ime: &mut bool)
     {
-        self.ime = false;
+        *ime = false;
     }
 
     //----------EXECUTION FUNCTIONS----------
@@ -1215,7 +1320,7 @@ impl Cpu
             if !valid_interrupts.is_empty()
             {
                 self.ime = false;
-                self.push_pc(ram);
+                Cpu::push_pc(ram, &mut self.sp, &mut self.pc);
             }
             if valid_interrupts.contains(ram::InterruptFlag::VB)
             {
@@ -1270,411 +1375,424 @@ impl Cpu
                 0x01 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.ld_r16_16(REG_B, REG_C, msh, lsh);
+                    Cpu::ld_r16_16(&mut self.reg_b, &mut self.reg_c, msh, lsh);
                 },
-                0x02 => {self.ld_r16a_r8(ram, REG_B, REG_C, REG_A);},
-                0x03 => {self.inc_r16(REG_B, REG_C);},
-                0x04 => {self.inc_r8(REG_B);},
-                0x05 => {self.dec_r8(REG_B);},
+                0x02 => {Cpu::ld_r16a_r8(ram, &mut self.reg_b, &mut self.reg_c, &mut self.reg_a);},
+                0x03 => {Cpu::inc_r16(&mut self.reg_b, &mut self.reg_c);},
+                0x04 => {Cpu::inc_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x05 => {Cpu::dec_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x06 => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.ld_r8_8(REG_B, num);
+                    Cpu::ld_r8_8(&mut self.reg_b, num);
                 },
-                0x07 => {self.rlca();},
+                0x07 => {Cpu::rlca(&mut self.reg_a, &mut self.reg_f);},
                 0x08 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.ld_16a_sp(ram, msh, lsh);
+                    Cpu::ld_16a_sp(&mut self.sp, ram, msh, lsh);
                 },
-                0x09 => {self.add_r16_r16(REG_H, REG_L, REG_B, REG_C);},
-                0x0A => {self.ld_r8_r16a(ram, REG_A, REG_B, REG_C);},
-                0x0B => {self.dec_r16(REG_B, REG_C);},
-                0x0C => {self.inc_r8(REG_C);},
-                0x0D => {self.dec_r8(REG_C);},
+                0x09 => {Cpu::add_r16_r16(&mut self.reg_h, &mut self.reg_l, &mut self.reg_b, &mut self.reg_c, &mut self.reg_f);},
+                0x0A => {Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_b, &mut self.reg_c);},
+                0x0B => {Cpu::dec_r16(&mut self.reg_b, &mut self.reg_c);},
+                0x0C => {Cpu::inc_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x0D => {Cpu::dec_r8(&mut self.reg_c, &mut self.reg_f);},
                 0x0E => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.ld_r8_8(REG_C, num);
+                    Cpu::ld_r8_8(&mut self.reg_c, num);
                 },
-                0x0F => {self.rrca();},
+                0x0F => {Cpu::rrca(&mut self.reg_a, &mut self.reg_f);},
                 0x10 => {self.stop();},
                 0x11 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.ld_r16_16(REG_D, REG_E, msh, lsh);
+                    Cpu::ld_r16_16(&mut self.reg_d, &mut self.reg_e, msh, lsh);
                 },
-                0x12 => {self.ld_r16a_r8(ram, REG_D, REG_E, REG_A);},
-                0x13 => {self.inc_r16(REG_D, REG_E);},
-                0x14 => {self.inc_r8(REG_D);},
-                0x15 => {self.dec_r8(REG_D);},
+                0x12 => {Cpu::ld_r16a_r8(ram, &mut self.reg_d, &mut self.reg_e, &mut self.reg_a);},
+                0x13 => {Cpu::inc_r16(&mut self.reg_d, &mut self.reg_e);},
+                0x14 => {Cpu::inc_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x15 => {Cpu::dec_r8(&mut self.reg_d, &mut self.reg_f);},
                 0x16 => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.ld_r8_8(REG_D, num);
+                    Cpu::ld_r8_8(&mut self.reg_d, num);
                 },
-                0x17 => {self.rla();},
+                0x17 => {Cpu::rla(&mut self.reg_a, &mut self.reg_f);},
                 0x18 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_i8(immediate);
+                    Cpu::jr_i8(&mut self.pc, immediate);
                 },
-                0x19 => {self.add_r16_r16(REG_H, REG_L, REG_D, REG_E);},
-                0x1A => {self.ld_r8_r16a(ram, REG_A, REG_D, REG_E);},
-                0x1B => {self.dec_r16(REG_D, REG_E);},
-                0x1C => {self.inc_r8(REG_E);},
-                0x1D => {self.dec_r8(REG_E);},
+                0x19 => {Cpu::add_r16_r16(&mut self.reg_h, &mut self.reg_l, &mut self.reg_d, &mut self.reg_e, &mut self.reg_f);},
+                0x1A => {Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_d, &mut self.reg_e);},
+                0x1B => {Cpu::dec_r16(&mut self.reg_d, &mut self.reg_e);},
+                0x1C => {Cpu::inc_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x1D => {Cpu::dec_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x1E => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.ld_r8_8(REG_E, num);
+                    Cpu::ld_r8_8(&mut self.reg_e, num);
                 },
-                0x1F => {self.rra();},
+                0x1F => {Cpu::rra(&mut self.reg_a, &mut self.reg_f);},
                 0x20 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_nflag_i8(Flag::FLAG_Z, immediate);
+                    Cpu::jr_nflag_i8(&mut self.pc, CpuFlags::FLAG_Z, immediate, &mut self.reg_f);
                 },
                 0x21 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.ld_r16_16(REG_H, REG_L, msh, lsh);
+                    Cpu::ld_r16_16(&mut self.reg_h, &mut self.reg_l, msh, lsh);
                 },
                 0x22 => {
-                    self.ld_r16a_r8(ram, REG_H, REG_L, REG_A);
-                    self.inc_r16(REG_H, REG_L);
+                    Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_a);
+                    Cpu::inc_r16(&mut self.reg_h, &mut self.reg_l);
                 },
-                0x23 => {self.inc_r16(REG_H, REG_L);},
-                0x24 => {self.inc_r8(REG_H);},
-                0x25 => {self.dec_r8(REG_H);},
+                0x23 => {Cpu::inc_r16(&mut self.reg_h, &mut self.reg_l);},
+                0x24 => {Cpu::inc_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x25 => {Cpu::dec_r8(&mut self.reg_h, &mut self.reg_f);},
                 0x26 => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.ld_r8_8(REG_H, num);
+                    Cpu::ld_r8_8(&mut self.reg_h, num);
                 },
-                0x27 => {self.daa();},
+                0x27 => {Cpu::daa(&mut self.reg_a, &mut self.reg_f);},
                 0x28 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_flag_i8(Flag::FLAG_Z, immediate);
+                    Cpu::jr_flag_i8(&mut self.pc, CpuFlags::FLAG_Z, immediate, &mut self.reg_f);
                 },
-                0x29 => {self.add_r16_r16(REG_H, REG_L, REG_H, REG_L)},
+                0x29 => {
+                    Cpu::add_r16_r16_s(&mut self.reg_h, &mut self.reg_l, &mut self.reg_f)},
                 0x2A => {
-                    self.ld_r8_r16a(ram, REG_A, REG_H, REG_L);
-                    self.inc_r16(REG_H, REG_L);
+                    Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l);
+                    Cpu::inc_r16(&mut self.reg_h, &mut self.reg_l);
                 },
-                0x2B => {self.dec_r16(REG_H, REG_L);},
-                0x2C => {self.inc_r8(REG_L);},
-                0x2D => {self.dec_r8(REG_L);},
+                0x2B => {Cpu::dec_r16(&mut self.reg_h, &mut self.reg_l);},
+                0x2C => {Cpu::inc_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x2D => {Cpu::dec_r8(&mut self.reg_l, &mut self.reg_f);},
                 0x2E => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.ld_r8_8(REG_L, num);
+                    Cpu::ld_r8_8(&mut self.reg_l, num);
                 },
-                0x2F => {self.cpl();},
+                0x2F => {Cpu::cpl(&mut self.reg_a, &mut self.reg_f);},
                 0x30 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_nflag_i8(Flag::FLAG_C, immediate);
+                    Cpu::jr_nflag_i8(&mut self.pc, CpuFlags::FLAG_C, immediate, &mut self.reg_f);
                 },
                 0x31 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.ld_sp_16( msh, lsh);
+                    Cpu::ld_sp_16( &mut self.sp, msh, lsh);
                 },
                 0x32 => {
-                    self.ld_r16a_r8(ram, REG_H, REG_L, REG_A);
-                    self.dec_r16(REG_H, REG_L);
+                    Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_a);
+                    Cpu::dec_r16(&mut self.reg_h, &mut self.reg_l);
                 },
-                0x33 => {self.inc_sp();},
-                0x34 => {self.inc_r16a(ram, REG_H, REG_L);},
-                0x35 => {self.dec_r16a(ram, REG_H, REG_L);},
+                0x33 => {Cpu::inc_sp(&mut self.sp);},
+                0x34 => {Cpu::inc_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x35 => {Cpu::dec_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
                 0x36 => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.ld_r16a_8(ram, REG_H, REG_L, num);
+                    Cpu::ld_r16a_8(ram, &mut self.reg_h, &mut self.reg_l, num);
                 },
-                0x37 => {self.scf();},
+                0x37 => {Cpu::scf(&mut self.reg_f);},
                 0x38 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.jr_flag_i8(Flag::FLAG_C, immediate);
+                    Cpu::jr_flag_i8(&mut self.pc, CpuFlags::FLAG_C, immediate, &mut self.reg_f);
                 },
-                0x39 => {self.add_r16_sp(REG_H, REG_L);},
+                0x39 => {Cpu::add_r16_sp( &mut self.reg_h, &mut self.reg_l, &mut self.sp, &mut self.reg_f);},
                 0x3A => {
-                    self.ld_r8_r16a(ram, REG_A, REG_H, REG_L);
-                    self.dec_r16(REG_H, REG_L);
+                    Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l);
+                    Cpu::dec_r16(&mut self.reg_h, &mut self.reg_l);
                 },
-                0x3B => {self.dec_sp();},
-                0x3C => {self.inc_r8(REG_A);},
-                0x3D => {self.dec_r8(REG_A);},
+                0x3B => {Cpu::dec_sp(&mut self.sp);},
+                0x3C => {Cpu::inc_r8(&mut self.reg_a, &mut self.reg_f);},
+                0x3D => {Cpu::dec_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x3E => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.ld_r8_8(REG_A, num);
+                    Cpu::ld_r8_8(&mut self.reg_a, num);
                 },
-                0x3F => {self.ccf();},
-                0x40 => {self.ld_r8_r8(REG_B, REG_B);},
-                0x41 => {self.ld_r8_r8(REG_B, REG_C);},
-                0x42 => {self.ld_r8_r8(REG_B, REG_D);},
-                0x43 => {self.ld_r8_r8(REG_B, REG_E);},
-                0x44 => {self.ld_r8_r8(REG_B, REG_H);},
-                0x45 => {self.ld_r8_r8(REG_B, REG_L);},
-                0x46 => {self.ld_r8_r16a(ram, REG_B, REG_H, REG_L);},
-                0x47 => {self.ld_r8_r8(REG_B, REG_A);},
-                0x48 => {self.ld_r8_r8(REG_C, REG_B);},
-                0x49 => {self.ld_r8_r8(REG_C, REG_C);},
-                0x4A => {self.ld_r8_r8(REG_C, REG_D);},
-                0x4B => {self.ld_r8_r8(REG_C, REG_E);},
-                0x4C => {self.ld_r8_r8(REG_C, REG_H);},
-                0x4D => {self.ld_r8_r8(REG_C, REG_L);},
-                0x4E => {self.ld_r8_r16a(ram, REG_C, REG_H, REG_L);},
-                0x4F => {self.ld_r8_r8(REG_C, REG_A);},
-                0x50 => {self.ld_r8_r8(REG_D, REG_B);},
-                0x51 => {self.ld_r8_r8(REG_D, REG_C);},
-                0x52 => {self.ld_r8_r8(REG_D, REG_D);},
-                0x53 => {self.ld_r8_r8(REG_D, REG_E);},
-                0x54 => {self.ld_r8_r8(REG_D, REG_H);},
-                0x55 => {self.ld_r8_r8(REG_D, REG_L);},
-                0x56 => {self.ld_r8_r16a(ram, REG_D, REG_H, REG_L);},
-                0x57 => {self.ld_r8_r8(REG_D, REG_A);},
-                0x58 => {self.ld_r8_r8(REG_E, REG_B);},
-                0x59 => {self.ld_r8_r8(REG_E, REG_C);},
-                0x5A => {self.ld_r8_r8(REG_E, REG_D);},
-                0x5B => {self.ld_r8_r8(REG_E, REG_E);},
-                0x5C => {self.ld_r8_r8(REG_E, REG_H);},
-                0x5D => {self.ld_r8_r8(REG_E, REG_L);},
-                0x5E => {self.ld_r8_r16a(ram, REG_E, REG_H, REG_L);},
-                0x5F => {self.ld_r8_r8(REG_E, REG_A);},
-                0x60 => {self.ld_r8_r8(REG_H, REG_B);},
-                0x61 => {self.ld_r8_r8(REG_H, REG_C);},
-                0x62 => {self.ld_r8_r8(REG_H, REG_D);},
-                0x63 => {self.ld_r8_r8(REG_H, REG_E);},
-                0x64 => {self.ld_r8_r8(REG_H, REG_H);},
-                0x65 => {self.ld_r8_r8(REG_H, REG_L);},
-                0x66 => {self.ld_r8_r16a(ram, REG_H, REG_H, REG_L);},
-                0x67 => {self.ld_r8_r8(REG_H, REG_A);},
-                0x68 => {self.ld_r8_r8(REG_L, REG_B);},
-                0x69 => {self.ld_r8_r8(REG_L, REG_C);},
-                0x6A => {self.ld_r8_r8(REG_L, REG_D);},
-                0x6B => {self.ld_r8_r8(REG_L, REG_E);},
-                0x6C => {self.ld_r8_r8(REG_L, REG_H);},
-                0x6D => {self.ld_r8_r8(REG_L, REG_L);},
-                0x6E => {self.ld_r8_r16a(ram, REG_L, REG_H, REG_L);},
-                0x6F => {self.ld_r8_r8(REG_L, REG_A);},
-                0x70 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_B);},
-                0x71 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_C);},
-                0x72 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_D);},
-                0x73 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_E);},
-                0x74 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_H);},
-                0x75 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_L);},
+                0x3F => {Cpu::ccf(&mut self.reg_f);},
+                0x40 => {Cpu::ld_r8_r8_s(&mut self.reg_b);},
+                0x41 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_c);},
+                0x42 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_d);},
+                0x43 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_e);},
+                0x44 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_h);},
+                0x45 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_l);},
+                0x46 => {Cpu::ld_r8_r16a(ram, &mut self.reg_b, &mut self.reg_h, &mut self.reg_l);},
+                0x47 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_a);},
+                0x48 => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_b);},
+                0x49 => {Cpu::ld_r8_r8_s(&mut self.reg_c);},
+                0x4A => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_d);},
+                0x4B => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_e);},
+                0x4C => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_h);},
+                0x4D => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_l);},
+                0x4E => {Cpu::ld_r8_r16a(ram, &mut self.reg_c, &mut self.reg_h, &mut self.reg_l);},
+                0x4F => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_a);},
+                0x50 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_b);},
+                0x51 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_c);},
+                0x52 => {Cpu::ld_r8_r8_s(&mut self.reg_d);},
+                0x53 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_e);},
+                0x54 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_h);},
+                0x55 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_l);},
+                0x56 => {Cpu::ld_r8_r16a(ram, &mut self.reg_d, &mut self.reg_h, &mut self.reg_l);},
+                0x57 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_a);},
+                0x58 => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_b);},
+                0x59 => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_c);},
+                0x5A => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_d);},
+                0x5B => {Cpu::ld_r8_r8_s(&mut self.reg_e);},
+                0x5C => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_h);},
+                0x5D => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_l);},
+                0x5E => {Cpu::ld_r8_r16a(ram, &mut self.reg_e, &mut self.reg_h, &mut self.reg_l);},
+                0x5F => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_a);},
+                0x60 => {Cpu::ld_r8_r8(&mut self.reg_h, &mut self.reg_b);},
+                0x61 => {Cpu::ld_r8_r8(&mut self.reg_h, &mut self.reg_c);},
+                0x62 => {Cpu::ld_r8_r8(&mut self.reg_h, &mut self.reg_d);},
+                0x63 => {Cpu::ld_r8_r8(&mut self.reg_h, &mut self.reg_e);},
+                0x64 => {Cpu::ld_r8_r8_s(&mut self.reg_h);},
+                0x65 => {Cpu::ld_r8_r8(&mut self.reg_h, &mut self.reg_l);},
+                0x66 => {
+                    let mut ram_read = ram.read_rp(self.reg_h, self.reg_l);
+                    Cpu::ld_r8_r8(&mut self.reg_h, &mut ram_read);
+                },
+                0x67 => {Cpu::ld_r8_r8(&mut self.reg_h, &mut self.reg_a);},
+                0x68 => {Cpu::ld_r8_r8(&mut self.reg_l, &mut self.reg_b);},
+                0x69 => {Cpu::ld_r8_r8(&mut self.reg_l, &mut self.reg_c);},
+                0x6A => {Cpu::ld_r8_r8(&mut self.reg_l, &mut self.reg_d);},
+                0x6B => {Cpu::ld_r8_r8(&mut self.reg_l, &mut self.reg_e);},
+                0x6C => {Cpu::ld_r8_r8(&mut self.reg_l, &mut self.reg_h);},
+                0x6D => {Cpu::ld_r8_r8_s(&mut self.reg_l);},
+                0x6E => {
+                    let mut ram_read = ram.read_rp(self.reg_h, self.reg_l);
+                    Cpu::ld_r8_r8(&mut self.reg_l, &mut ram_read);
+                },
+                0x6F => {Cpu::ld_r8_r8(&mut self.reg_l, &mut self.reg_a);},
+                0x70 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_b);},
+                0x71 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_c);},
+                0x72 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_d);},
+                0x73 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_e);},
+                0x74 => {
+                    let mut ram_read = ram.get_rp_ref(self.reg_h, self.reg_l);
+                    Cpu::ld_r8_r8(&mut ram_read, &mut self.reg_h);
+                },
+                0x75 => {
+                    let mut ram_read = ram.get_rp_ref(self.reg_h, self.reg_l);
+                    Cpu::ld_r8_r8(&mut ram_read, &mut self.reg_l);
+                },
                 0x76 => {self.halt();},
-                0x77 => {self.ld_r16a_r8(ram, REG_H, REG_L, REG_A);},
-                0x78 => {self.ld_r8_r8(REG_A, REG_B);},
-                0x79 => {self.ld_r8_r8(REG_A, REG_C);},
-                0x7A => {self.ld_r8_r8(REG_A, REG_D);},
-                0x7B => {self.ld_r8_r8(REG_A, REG_E);},
-                0x7C => {self.ld_r8_r8(REG_A, REG_H);},
-                0x7D => {self.ld_r8_r8(REG_A, REG_L);},
-                0x7E => {self.ld_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0x7F => {self.ld_r8_r8(REG_A, REG_A);},
-                0x80 => {self.add_r8_r8(REG_A, REG_B);},
-                0x81 => {self.add_r8_r8(REG_A, REG_C);},
-                0x82 => {self.add_r8_r8(REG_A, REG_D);},
-                0x83 => {self.add_r8_r8(REG_A, REG_E);},
-                0x84 => {self.add_r8_r8(REG_A, REG_H);},
-                0x85 => {self.add_r8_r8(REG_A, REG_L);},
-                0x86 => {self.add_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0x87 => {self.add_r8_r8(REG_A, REG_A);},
-                0x88 => {self.adc_r8_r8(REG_A, REG_B);},
-                0x89 => {self.adc_r8_r8(REG_A, REG_C);},
-                0x8A => {self.adc_r8_r8(REG_A, REG_D);},
-                0x8B => {self.adc_r8_r8(REG_A, REG_E);},
-                0x8C => {self.adc_r8_r8(REG_A, REG_H);},
-                0x8D => {self.adc_r8_r8(REG_A, REG_L);},
-                0x8E => {self.adc_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0x8F => {self.adc_r8_r8(REG_A, REG_A);},
-                0x90 => {self.sub_r8_r8(REG_A, REG_B);},
-                0x91 => {self.sub_r8_r8(REG_A, REG_C);},
-                0x92 => {self.sub_r8_r8(REG_A, REG_D);},
-                0x93 => {self.sub_r8_r8(REG_A, REG_E);},
-                0x94 => {self.sub_r8_r8(REG_A, REG_H);},
-                0x95 => {self.sub_r8_r8(REG_A, REG_L);},
-                0x96 => {self.sub_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0x97 => {self.sub_r8_r8(REG_A, REG_A);},
-                0x98 => {self.sbc_r8_r8(REG_A, REG_B);},
-                0x99 => {self.sbc_r8_r8(REG_A, REG_C);},
-                0x9A => {self.sbc_r8_r8(REG_A, REG_D);},
-                0x9B => {self.sbc_r8_r8(REG_A, REG_E);},
-                0x9C => {self.sbc_r8_r8(REG_A, REG_H);},
-                0x9D => {self.sbc_r8_r8(REG_A, REG_L);},
-                0x9E => {self.sbc_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0x9F => {self.sbc_r8_r8(REG_A, REG_A);},
-                0xA0 => {self.and_r8_r8(REG_A, REG_B);},
-                0xA1 => {self.and_r8_r8(REG_A, REG_C);},
-                0xA2 => {self.and_r8_r8(REG_A, REG_D);},
-                0xA3 => {self.and_r8_r8(REG_A, REG_E);},
-                0xA4 => {self.and_r8_r8(REG_A, REG_H);},
-                0xA5 => {self.and_r8_r8(REG_A, REG_L);},
-                0xA6 => {self.and_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0xA7 => {self.and_r8_r8(REG_A, REG_A);},
-                0xA8 => {self.xor_r8_r8(REG_A, REG_B);},
-                0xA9 => {self.xor_r8_r8(REG_A, REG_C);},
-                0xAA => {self.xor_r8_r8(REG_A, REG_D);},
-                0xAB => {self.xor_r8_r8(REG_A, REG_E);},
-                0xAC => {self.xor_r8_r8(REG_A, REG_H);},
-                0xAD => {self.xor_r8_r8(REG_A, REG_L);},
-                0xAE => {self.xor_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0xAF => {self.xor_r8_r8(REG_A, REG_A);},
-                0xB0 => {self.or_r8_r8(REG_A, REG_B);},
-                0xB1 => {self.or_r8_r8(REG_A, REG_C);},
-                0xB2 => {self.or_r8_r8(REG_A, REG_D);},
-                0xB3 => {self.or_r8_r8(REG_A, REG_E);},
-                0xB4 => {self.or_r8_r8(REG_A, REG_H);},
-                0xB5 => {self.or_r8_r8(REG_A, REG_L);},
-                0xB6 => {self.or_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0xB7 => {self.or_r8_r8(REG_A, REG_A);},
-                0xB8 => {self.cp_r8_r8(REG_A, REG_B);},
-                0xB9 => {self.cp_r8_r8(REG_A, REG_C);},
-                0xBA => {self.cp_r8_r8(REG_A, REG_D);},
-                0xBB => {self.cp_r8_r8(REG_A, REG_E);},
-                0xBC => {self.cp_r8_r8(REG_A, REG_H);},
-                0xBD => {self.cp_r8_r8(REG_A, REG_L);},
-                0xBE => {self.cp_r8_r16a(ram, REG_A, REG_H, REG_L);},
-                0xBF => {self.cp_r8_r8(REG_A, REG_A);},
-                0xC0 => {self.ret_nflag(ram, Flag::FLAG_Z);},
-                0xC1 => {self.pop_r16(ram, REG_B, REG_C);},
+                0x77 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_a);},
+                0x78 => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_b);},
+                0x79 => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_c);},
+                0x7A => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_d);},
+                0x7B => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_e);},
+                0x7C => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_h);},
+                0x7D => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_l);},
+                0x7E => {Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l);},
+                0x7F => {Cpu::ld_r8_r8_s(&mut self.reg_a);},
+                0x80 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
+                0x81 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
+                0x82 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_d, &mut self.reg_f);},
+                0x83 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
+                0x84 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
+                0x85 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
+                0x86 => {Cpu::add_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x87 => {Cpu::add_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0x88 => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
+                0x89 => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
+                0x8A => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_d, &mut self.reg_f);},
+                0x8B => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
+                0x8C => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
+                0x8D => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
+                0x8E => {Cpu::adc_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x8F => {Cpu::adc_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0x90 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
+                0x91 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
+                0x92 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_d, &mut self.reg_f);},
+                0x93 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
+                0x94 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
+                0x95 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
+                0x96 => {Cpu::sub_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x97 => {Cpu::sub_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0x98 => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
+                0x99 => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
+                0x9A => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_d, &mut self.reg_f);},
+                0x9B => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
+                0x9C => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
+                0x9D => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
+                0x9E => {Cpu::sbc_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x9F => {Cpu::sbc_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0xA0 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
+                0xA1 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
+                0xA2 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_d, &mut self.reg_f);},
+                0xA3 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
+                0xA4 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
+                0xA5 => {Cpu::and_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0xA6 => {Cpu::and_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0xA7 => {Cpu::and_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0xA8 => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
+                0xA9 => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
+                0xAA => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_d, &mut self.reg_f);},
+                0xAB => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
+                0xAC => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
+                0xAD => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
+                0xAE => {Cpu::xor_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0xAF => {Cpu::xor_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0xB0 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
+                0xB1 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
+                0xB2 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_d, &mut self.reg_f);},
+                0xB3 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
+                0xB4 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
+                0xB5 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
+                0xB6 => {Cpu::or_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0xB7 => {Cpu::or_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0xB8 => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
+                0xB9 => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
+                0xBA => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_d, &mut self.reg_f);},
+                0xBB => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
+                0xBC => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
+                0xBD => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
+                0xBE => {Cpu::cp_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0xBF => {Cpu::cp_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
+                0xC0 => {Cpu::ret_nflag(ram, &mut self.pc, &mut self.sp, CpuFlags::FLAG_Z, &mut self.reg_f);},
+                0xC1 => {Cpu::pop_r16(ram, &mut self.sp, &mut self.reg_b, &mut self.reg_c);},
                 0xC2 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_nflag_pc_16(Flag::FLAG_Z, msh, lsh);
+                    Cpu::jp_nflag_pc_16(&mut self.pc, CpuFlags::FLAG_Z, msh, lsh, &mut self.reg_f);
                 },
                 0xC3 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_pc_16(msh, lsh);
+                    Cpu::jp_pc_16(&mut self.pc, msh, lsh);
                 },
                 0xC4 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_nflag_16(ram, Flag::FLAG_Z, msh, lsh);
+                    Cpu::call_nflag_16(ram, CpuFlags::FLAG_Z, msh, lsh, &mut self.pc, &mut self.sp, &mut self.reg_f);
                 },
-                0xC5 => {self.push_r16(ram, REG_B, REG_C);},
+                0xC5 => {Cpu::push_r16(ram, &mut self.sp, &mut self.reg_b, &mut self.reg_c);},
                 0xC6 => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.add_r8_8(REG_A, num);
+                    Cpu::add_r8_8(&mut self.reg_a, num, &mut self.reg_f);
                 },
-                0xC7 => {self.rst(ram, 0x00);},
-                0xC8 => {self.ret_flag(ram, Flag::FLAG_Z);},
-                0xC9 => {self.ret(ram);},
+                0xC7 => {Cpu::rst(ram, 0x00, &mut self.pc, &mut self.sp);},
+                0xC8 => {Cpu::ret_flag(ram, &mut self.pc, &mut self.sp, CpuFlags::FLAG_Z, &mut self.reg_f);},
+                0xC9 => {Cpu::ret(ram, &mut self.pc, &mut self.sp);},
                 0xCA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_flag_pc_16(Flag::FLAG_Z, msh, lsh);
+                    Cpu::jp_flag_pc_16(&mut self.pc, CpuFlags::FLAG_Z, msh, lsh, &mut self.reg_f);
                 },
                 0xCB => {/*Prefix for the next instruction, handled earlier*/},
                 0xCC => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_flag_16(ram, Flag::FLAG_Z, msh, lsh);
+                    Cpu::call_flag_16(ram, CpuFlags::FLAG_Z, msh, lsh, &mut self.pc, &mut self.sp, &mut self.reg_f);
                 },
                 0xCD => {let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_16(ram, msh, lsh);},
+                    Cpu::call_16(ram, msh, lsh, &mut self.pc, &mut self.sp);},
                 0xCE => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.adc_r8_8(REG_A, num);
+                    Cpu::adc_r8_8(&mut self.reg_a, num, &mut self.reg_f);
                 },
-                0xCF => {self.rst(ram, 0x08);},
-                0xD0 => {self.ret_nflag(ram, Flag::FLAG_C);},
-                0xD1 => {self.pop_r16(ram, REG_D, REG_E);},
+                0xCF => {Cpu::rst(ram, 0x08, &mut self.pc, &mut self.sp);},
+                0xD0 => {Cpu::ret_nflag(ram, &mut self.pc, &mut self.sp, CpuFlags::FLAG_C, &mut self.reg_f);},
+                0xD1 => {Cpu::pop_r16(ram, &mut self.sp, &mut self.reg_d, &mut self.reg_e);},
                 0xD2 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_nflag_pc_16(Flag::FLAG_C, msh, lsh);
+                    Cpu::jp_nflag_pc_16(&mut self.pc, CpuFlags::FLAG_C, msh, lsh, &mut self.reg_f);
                 },
                 0xD3 => {self.invalid_instruction(0xD3);},
                 0xD4 => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_nflag_16(ram, Flag::FLAG_C, msh, lsh);
+                    Cpu::call_nflag_16(ram, CpuFlags::FLAG_C, msh, lsh, &mut self.pc, &mut self.sp, &mut self.reg_f);
                 },
-                0xD5 => {self.push_r16(ram, REG_D, REG_E);},
+                0xD5 => {Cpu::push_r16(ram, &mut self.sp, &mut self.reg_d, &mut self.reg_e);},
                 0xD6 => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.sub_r8_8(REG_A, num);
+                    Cpu::sub_r8_8(&mut self.reg_a, num, &mut self.reg_f);
                 },
-                0xD7 => {self.rst(ram, 0x10);},
-                0xD8 => {self.ret_flag(ram, Flag::FLAG_C);},
-                0xD9 => {self.reti(ram);},
+                0xD7 => {Cpu::rst(ram, 0x10, &mut self.pc, &mut self.sp);},
+                0xD8 => {Cpu::ret_flag(ram, &mut self.pc, &mut self.sp, CpuFlags::FLAG_C, &mut self.reg_f);},
+                0xD9 => {Cpu::reti(ram, &mut self.sp, &mut self.pc, &mut self.ime);},
                 0xDA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.jp_flag_pc_16(Flag::FLAG_C, msh, lsh);
+                    Cpu::jp_flag_pc_16(&mut self.pc, CpuFlags::FLAG_C, msh, lsh, &mut self.reg_f);
                 },
                 0xDB => {self.invalid_instruction(0xDB);},
                 0xDC => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.call_flag_16(ram, Flag::FLAG_C, msh, lsh);
+                    Cpu::call_flag_16(ram, CpuFlags::FLAG_C, msh, lsh, &mut self.pc, &mut self.sp, &mut self.reg_f);
                 },
                 0xDD => {self.invalid_instruction(0xDD);},
                 0xDE => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.sbc_r8_8(REG_A, num);
+                    Cpu::sbc_r8_8(&mut self.reg_a, num, &mut self.reg_f);
                 },
-                0xDF => {self.rst(ram, 0x18);},
+                0xDF => {Cpu::rst(ram, 0x18, &mut self.pc, &mut self.sp);},
                 0xE0 => {
                     let lsh = self.aux_read_immediate_data(ram);
-                    self.ld_16a_r8(ram, 0xFF, lsh, REG_A);
+                    Cpu::ld_16a_r8(ram, 0xFF, lsh, &mut self.reg_a);
                 },
-                0xE1 => {self.pop_r16(ram, REG_H, REG_L);},
-                0xE2 => {self.ld_16a_r8(ram, 0xFF, self.regs[REG_C], REG_A);},
+                0xE1 => {Cpu::pop_r16(ram, &mut self.sp, &mut self.reg_h, &mut self.reg_l);},
+                0xE2 => {Cpu::ld_16a_r8(ram, 0xFF, self.reg_c, &mut self.reg_a);},
                 0xE3 => {self.invalid_instruction(0xE3);},
                 0xE4 => {self.invalid_instruction(0xE4);},
-                0xE5 => {self.push_r16(ram, REG_H, REG_L);},
+                0xE5 => {Cpu::push_r16(ram, &mut self.sp, &mut self.reg_h, &mut self.reg_l);},
                 0xE6 => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.and_r8_8(REG_A, num);
+                    Cpu::and_r8_8(&mut self.reg_a, num, &mut self.reg_f);
                 },
-                0xE7 => {self.rst(ram, 0x20);},
+                0xE7 => {Cpu::rst(ram, 0x20, &mut self.pc, &mut self.sp);},
                 0xE8 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.add_sp_i8(immediate);
+                    Cpu::add_sp_i8(&mut self.sp, immediate);
                 },
-                0xE9 => {self.jp_pc_16(self.regs[REG_H], self.regs[REG_L]);},
+                0xE9 => {Cpu::jp_pc_16(&mut self.pc, self.reg_h, self.reg_l);},
                 0xEA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.ld_16a_r8(ram, msh, lsh, REG_A);
+                    Cpu::ld_16a_r8(ram, msh, lsh, &mut self.reg_a);
                 },
                 0xEB => {self.invalid_instruction(0xEB);},
                 0xEC => {self.invalid_instruction(0xEC);},
                 0xED => {self.invalid_instruction(0xED);},
                 0xEE => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.xor_r8_8(REG_A, num);
+                    Cpu::xor_r8_8(&mut self.reg_a, num, &mut self.reg_f);
                 },
-                0xEF => {self.rst(ram, 0x28);},
+                0xEF => {Cpu::rst(ram, 0x28, &mut self.pc, &mut self.sp);},
                 0xF0 => {
                     let lsh = self.aux_read_immediate_data(ram);
-                    self.ld_r8_16a(ram, REG_A, 0xFF, lsh)
+                    Cpu::ld_r8_16a(ram, &mut self.reg_a, 0xFF, lsh)
                 },
-                0xF1 => {self.pop_r16(ram, REG_A, REG_F);},
-                0xF2 => {self.ld_r8_16a(ram, REG_A, 0xFF, self.regs[REG_C]);},
-                0xF3 => {self.di();},
+                0xF1 => {Cpu::pop_r16(ram, &mut self.sp, &mut self.reg_a, &mut self.reg_f.bits);},
+                0xF2 => {Cpu::ld_r8_16a(ram, &mut self.reg_a, 0xFF, self.reg_c);},
+                0xF3 => {Cpu::di(&mut self.ime);},
                 0xF4 => {self.invalid_instruction(0xF4);},
-                0xF5 => {self.push_r16(ram, REG_A, REG_F);},
+                0xF5 => {Cpu::push_r16(ram, &mut self.sp, &mut self.reg_a, &mut self.reg_f.bits);},
                 0xF6 => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.or_r8_8(REG_A, num);
+                    Cpu::or_r8_8(&mut self.reg_a, num, &mut self.reg_f);
                 },
-                0xF7 => {self.rst(ram, 0x30);},
+                0xF7 => {Cpu::rst(ram, 0x30, &mut self.pc, &mut self.sp);},
                 0xF8 => {
                     let immediate = self.aux_read_immediate_data(ram) as i8;
-                    self.ld_hl_sp_plus(immediate);
+                    Cpu::ld_hl_sp_plus(&mut self.sp, &mut self.reg_h, &mut self.reg_l, immediate);
                 },
-                0xF9 => {self.ld_sp_r16( REG_H, REG_L);},
+                0xF9 => {Cpu::ld_sp_r16(&mut self.sp, &mut self.reg_h, &mut self.reg_l);},
                 0xFA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    self.ld_r8_16a(ram, REG_A, msh, lsh);
+                    Cpu::ld_r8_16a(ram, &mut self.reg_a, msh, lsh);
                 },
-                0xFB => {self.ei();},
+                0xFB => {Cpu::ei(&mut self.ime);},
                 0xFC => {self.invalid_instruction(0xFC);},
                 0xFD => {self.invalid_instruction(0xFD);},
                 0xFE => {
                     let num = self.aux_read_immediate_data(ram);
-                    self.cp_r8_8(REG_A, num);
+                    Cpu::cp_r8_8(&mut self.reg_a, num, &mut self.reg_f);
                 },
-                0xFF => {self.rst(ram, 0x38);}
+                0xFF => {Cpu::rst(ram, 0x38, &mut self.pc, &mut self.sp);}
             }
 
             self.pc.current_instruction_cycles += ZERO_INSTRUCTION_TIME_TABLE[instruction as usize];
@@ -1687,262 +1805,262 @@ impl Cpu
 
             match cb_instruction //CB Prefix
             {
-                0x00 => {self.rlc_r8(REG_B);},
-                0x01 => {self.rlc_r8(REG_C);},
-                0x02 => {self.rlc_r8(REG_D);},
-                0x03 => {self.rlc_r8(REG_E);},
-                0x04 => {self.rlc_r8(REG_H);},
-                0x05 => {self.rlc_r8(REG_L);},
-                0x06 => {self.rlc_r16a(ram, REG_H, REG_L);},
-                0x07 => {self.rlc_r8(REG_A);},
-                0x08 => {self.rrc_r8(REG_B);},
-                0x09 => {self.rrc_r8(REG_C);},
-                0x0A => {self.rrc_r8(REG_D);},
-                0x0B => {self.rrc_r8(REG_E);},
-                0x0C => {self.rrc_r8(REG_H);},
-                0x0D => {self.rrc_r8(REG_L);},
-                0x0E => {self.rrc_r16a(ram, REG_H, REG_L);},
-                0x0F => {self.rrc_r8(REG_A);},
-                0x10 => {self.rl_r8(REG_B);},
-                0x11 => {self.rl_r8(REG_C);},
-                0x12 => {self.rl_r8(REG_D);},
-                0x13 => {self.rl_r8(REG_E);},
-                0x14 => {self.rl_r8(REG_H);},
-                0x15 => {self.rl_r8(REG_L);},
-                0x16 => {self.rl_r16a(ram, REG_H, REG_L);},
-                0x17 => {self.rl_r8(REG_A);},
-                0x18 => {self.rr_r8(REG_B);},
-                0x19 => {self.rr_r8(REG_C);},
-                0x1A => {self.rr_r8(REG_D);},
-                0x1B => {self.rr_r8(REG_E);},
-                0x1C => {self.rr_r8(REG_H);},
-                0x1D => {self.rr_r8(REG_L);},
-                0x1E => {self.rr_r16a(ram, REG_H, REG_L);},
-                0x1F => {self.rr_r8(REG_A);},
-                0x20 => {self.sla_r8(REG_B);},
-                0x21 => {self.sla_r8(REG_C);},
-                0x22 => {self.sla_r8(REG_D);},
-                0x23 => {self.sla_r8(REG_E);},
-                0x24 => {self.sla_r8(REG_H);},
-                0x25 => {self.sla_r8(REG_L);},
-                0x26 => {self.sla_r16a(ram, REG_H, REG_L);},
-                0x27 => {self.sla_r8(REG_A);},
-                0x28 => {self.sra_r8(REG_B);},
-                0x29 => {self.sra_r8(REG_C);},
-                0x2A => {self.sra_r8(REG_D);},
-                0x2B => {self.sra_r8(REG_E);},
-                0x2C => {self.sra_r8(REG_H);},
-                0x2D => {self.sra_r8(REG_L);},
-                0x2E => {self.sra_r16a(ram, REG_H, REG_L);},
-                0x2F => {self.sra_r8(REG_A);},
-                0x30 => {self.swap_r8(REG_B);},
-                0x31 => {self.swap_r8(REG_C);},
-                0x32 => {self.swap_r8(REG_D);},
-                0x33 => {self.swap_r8(REG_E);},
-                0x34 => {self.swap_r8(REG_H);},
-                0x35 => {self.swap_r8(REG_L);},
-                0x36 => {self.swap_r16a(ram, REG_H, REG_L);},
-                0x37 => {self.swap_r8(REG_A);},
-                0x38 => {self.srl_r8(REG_B);},
-                0x39 => {self.srl_r8(REG_C);},
-                0x3A => {self.srl_r8(REG_D);},
-                0x3B => {self.srl_r8(REG_E);},
-                0x3C => {self.srl_r8(REG_H);},
-                0x3D => {self.srl_r8(REG_L);},
-                0x3E => {self.srl_r16a(ram, REG_H, REG_L);},
-                0x3F => {self.srl_r8(REG_A);},
-                0x40 => {self.bit_r8(0, REG_B);},
-                0x41 => {self.bit_r8(0, REG_C);},
-                0x42 => {self.bit_r8(0, REG_D);},
-                0x43 => {self.bit_r8(0, REG_E);},
-                0x44 => {self.bit_r8(0, REG_H);},
-                0x45 => {self.bit_r8(0, REG_L);},
-                0x46 => {self.bit_r16a(ram, 0, REG_H, REG_L);},
-                0x47 => {self.bit_r8(0, REG_A);},
-                0x48 => {self.bit_r8(1, REG_B);},
-                0x49 => {self.bit_r8(1, REG_C);},
-                0x4A => {self.bit_r8(1, REG_D);},
-                0x4B => {self.bit_r8(1, REG_E);},
-                0x4C => {self.bit_r8(1, REG_H);},
-                0x4D => {self.bit_r8(1, REG_L);},
-                0x4E => {self.bit_r16a(ram, 1, REG_H, REG_L);},
-                0x4F => {self.bit_r8(1, REG_A);},
-                0x50 => {self.bit_r8(2, REG_B);},
-                0x51 => {self.bit_r8(2, REG_C);},
-                0x52 => {self.bit_r8(2, REG_D);},
-                0x53 => {self.bit_r8(2, REG_E);},
-                0x54 => {self.bit_r8(2, REG_H);},
-                0x55 => {self.bit_r8(2, REG_L);},
-                0x56 => {self.bit_r16a(ram, 2, REG_H, REG_L);},
-                0x57 => {self.bit_r8(2, REG_A);},
-                0x58 => {self.bit_r8(3, REG_B);},
-                0x59 => {self.bit_r8(3, REG_C);},
-                0x5A => {self.bit_r8(3, REG_D);},
-                0x5B => {self.bit_r8(3, REG_E);},
-                0x5C => {self.bit_r8(3, REG_H);},
-                0x5D => {self.bit_r8(3, REG_L);},
-                0x5E => {self.bit_r16a(ram, 3, REG_H, REG_L);},
-                0x5F => {self.bit_r8(3, REG_A);},
-                0x60 => {self.bit_r8(4, REG_B);},
-                0x61 => {self.bit_r8(4, REG_C);},
-                0x62 => {self.bit_r8(4, REG_D);},
-                0x63 => {self.bit_r8(4, REG_E);},
-                0x64 => {self.bit_r8(4, REG_H);},
-                0x65 => {self.bit_r8(4, REG_L);},
-                0x66 => {self.bit_r16a(ram, 4, REG_H, REG_L);},
-                0x67 => {self.bit_r8(4, REG_A);},
-                0x68 => {self.bit_r8(5, REG_B);},
-                0x69 => {self.bit_r8(5, REG_C);},
-                0x6A => {self.bit_r8(5, REG_D);},
-                0x6B => {self.bit_r8(5, REG_E);},
-                0x6C => {self.bit_r8(5, REG_H);},
-                0x6D => {self.bit_r8(5, REG_L);},
-                0x6E => {self.bit_r16a(ram, 5, REG_H, REG_L);},
-                0x6F => {self.bit_r8(5, REG_A);},
-                0x70 => {self.bit_r8(6, REG_B);},
-                0x71 => {self.bit_r8(6, REG_C);},
-                0x72 => {self.bit_r8(6, REG_D);},
-                0x73 => {self.bit_r8(6, REG_E);},
-                0x74 => {self.bit_r8(6, REG_H);},
-                0x75 => {self.bit_r8(6, REG_L);},
-                0x76 => {self.bit_r16a(ram, 6, REG_H, REG_L);},
-                0x77 => {self.bit_r8(6, REG_A);},
-                0x78 => {self.bit_r8(7, REG_B);},
-                0x79 => {self.bit_r8(7, REG_C);},
-                0x7A => {self.bit_r8(7, REG_D);},
-                0x7B => {self.bit_r8(7, REG_E);},
-                0x7C => {self.bit_r8(7, REG_H);},
-                0x7D => {self.bit_r8(7, REG_L);},
-                0x7E => {self.bit_r16a(ram, 7, REG_H, REG_L);},
-                0x7F => {self.bit_r8(7, REG_A);},
-                0x80 => {self.res_r8(0, REG_B);},
-                0x81 => {self.res_r8(0, REG_C);},
-                0x82 => {self.res_r8(0, REG_D);},
-                0x83 => {self.res_r8(0, REG_E);},
-                0x84 => {self.res_r8(0, REG_H);},
-                0x85 => {self.res_r8(0, REG_L);},
-                0x86 => {self.res_r16a(ram, 0, REG_H, REG_L);},
-                0x87 => {self.res_r8(0, REG_A);},
-                0x88 => {self.res_r8(1, REG_B);},
-                0x89 => {self.res_r8(1, REG_C);},
-                0x8A => {self.res_r8(1, REG_D);},
-                0x8B => {self.res_r8(1, REG_E);},
-                0x8C => {self.res_r8(1, REG_H);},
-                0x8D => {self.res_r8(1, REG_L);},
-                0x8E => {self.res_r16a(ram, 1, REG_H, REG_L);},
-                0x8F => {self.res_r8(1, REG_A);},
-                0x90 => {self.res_r8(2, REG_B);},
-                0x91 => {self.res_r8(2, REG_C);},
-                0x92 => {self.res_r8(2, REG_D);},
-                0x93 => {self.res_r8(2, REG_E);},
-                0x94 => {self.res_r8(2, REG_H);},
-                0x95 => {self.res_r8(2, REG_L);},
-                0x96 => {self.res_r16a(ram, 2, REG_H, REG_L);},
-                0x97 => {self.res_r8(2, REG_A);},
-                0x98 => {self.res_r8(3, REG_B);},
-                0x99 => {self.res_r8(3, REG_C);},
-                0x9A => {self.res_r8(3, REG_D);},
-                0x9B => {self.res_r8(3, REG_E);},
-                0x9C => {self.res_r8(3, REG_H);},
-                0x9D => {self.res_r8(3, REG_L);},
-                0x9E => {self.res_r16a(ram, 3, REG_H, REG_L);},
-                0x9F => {self.res_r8(3, REG_A);},
-                0xA0 => {self.res_r8(4, REG_B);},
-                0xA1 => {self.res_r8(4, REG_C);},
-                0xA2 => {self.res_r8(4, REG_D);},
-                0xA3 => {self.res_r8(4, REG_E);},
-                0xA4 => {self.res_r8(4, REG_H);},
-                0xA5 => {self.res_r8(4, REG_L);},
-                0xA6 => {self.res_r16a(ram, 4, REG_H, REG_L);},
-                0xA7 => {self.res_r8(4, REG_A);},
-                0xA8 => {self.res_r8(5, REG_B);},
-                0xA9 => {self.res_r8(5, REG_C);},
-                0xAA => {self.res_r8(5, REG_D);},
-                0xAB => {self.res_r8(5, REG_E);},
-                0xAC => {self.res_r8(5, REG_H);},
-                0xAD => {self.res_r8(5, REG_L);},
-                0xAE => {self.res_r16a(ram, 5, REG_H, REG_L);},
-                0xAF => {self.res_r8(5, REG_A);},
-                0xB0 => {self.res_r8(6, REG_B);},
-                0xB1 => {self.res_r8(6, REG_C);},
-                0xB2 => {self.res_r8(6, REG_D);},
-                0xB3 => {self.res_r8(6, REG_E);},
-                0xB4 => {self.res_r8(6, REG_H);},
-                0xB5 => {self.res_r8(6, REG_L);},
-                0xB6 => {self.res_r16a(ram, 6, REG_H, REG_L);},
-                0xB7 => {self.res_r8(6, REG_A);},
-                0xB8 => {self.res_r8(7, REG_B);},
-                0xB9 => {self.res_r8(7, REG_C);},
-                0xBA => {self.res_r8(7, REG_D);},
-                0xBB => {self.res_r8(7, REG_E);},
-                0xBC => {self.res_r8(7, REG_H);},
-                0xBD => {self.res_r8(7, REG_L);},
-                0xBE => {self.res_r16a(ram, 7, REG_H, REG_L);},
-                0xBF => {self.res_r8(7, REG_A);},
-                0xC0 => {self.set_r8(0, REG_B);},
-                0xC1 => {self.set_r8(0, REG_C);},
-                0xC2 => {self.set_r8(0, REG_D);},
-                0xC3 => {self.set_r8(0, REG_E);},
-                0xC4 => {self.set_r8(0, REG_H);},
-                0xC5 => {self.set_r8(0, REG_L);},
-                0xC6 => {self.set_r16a(ram, 0, REG_H, REG_L);},
-                0xC7 => {self.set_r8(0, REG_A);},
-                0xC8 => {self.set_r8(1, REG_B);},
-                0xC9 => {self.set_r8(1, REG_C);},
-                0xCA => {self.set_r8(1, REG_D);},
-                0xCB => {self.set_r8(1, REG_E);},
-                0xCC => {self.set_r8(1, REG_H);},
-                0xCD => {self.set_r8(1, REG_L);},
-                0xCE => {self.set_r16a(ram, 1, REG_H, REG_L);},
-                0xCF => {self.set_r8(1, REG_A);},
-                0xD0 => {self.set_r8(2, REG_B);},
-                0xD1 => {self.set_r8(2, REG_C);},
-                0xD2 => {self.set_r8(2, REG_D);},
-                0xD3 => {self.set_r8(2, REG_E);},
-                0xD4 => {self.set_r8(2, REG_H);},
-                0xD5 => {self.set_r8(2, REG_L);},
-                0xD6 => {self.set_r16a(ram, 2, REG_H, REG_L);},
-                0xD7 => {self.set_r8(2, REG_A);},
-                0xD8 => {self.set_r8(3, REG_B);},
-                0xD9 => {self.set_r8(3, REG_C);},
-                0xDA => {self.set_r8(3, REG_D);},
-                0xDB => {self.set_r8(3, REG_E);},
-                0xDC => {self.set_r8(3, REG_H);},
-                0xDD => {self.set_r8(3, REG_L);},
-                0xDE => {self.set_r16a(ram, 3, REG_H, REG_L);},
-                0xDF => {self.set_r8(3, REG_A);},
-                0xE0 => {self.set_r8(4, REG_B);},
-                0xE1 => {self.set_r8(4, REG_C);},
-                0xE2 => {self.set_r8(4, REG_D);},
-                0xE3 => {self.set_r8(4, REG_E);},
-                0xE4 => {self.set_r8(4, REG_H);},
-                0xE5 => {self.set_r8(4, REG_L);},
-                0xE6 => {self.set_r16a(ram, 4, REG_H, REG_L);},
-                0xE7 => {self.set_r8(4, REG_A);},
-                0xE8 => {self.set_r8(5, REG_B);},
-                0xE9 => {self.set_r8(5, REG_C);},
-                0xEA => {self.set_r8(5, REG_D);},
-                0xEB => {self.set_r8(5, REG_E);},
-                0xEC => {self.set_r8(5, REG_H);},
-                0xED => {self.set_r8(5, REG_L);},
-                0xEE => {self.set_r16a(ram, 5, REG_H, REG_L);},
-                0xEF => {self.set_r8(5, REG_A);},
-                0xF0 => {self.set_r8(6, REG_B);},
-                0xF1 => {self.set_r8(6, REG_C);},
-                0xF2 => {self.set_r8(6, REG_D);},
-                0xF3 => {self.set_r8(6, REG_E);},
-                0xF4 => {self.set_r8(6, REG_H);},
-                0xF5 => {self.set_r8(6, REG_L);},
-                0xF6 => {self.set_r16a(ram, 6, REG_H, REG_L);},
-                0xF7 => {self.set_r8(6, REG_A);},
-                0xF8 => {self.set_r8(7, REG_B);},
-                0xF9 => {self.set_r8(7, REG_C);},
-                0xFA => {self.set_r8(7, REG_D);},
-                0xFB => {self.set_r8(7, REG_E);},
-                0xFC => {self.set_r8(7, REG_H);},
-                0xFD => {self.set_r8(7, REG_L);},
-                0xFE => {self.set_r16a(ram, 7, REG_H, REG_L);},
-                0xFF => {self.set_r8(7, REG_A);}
+                0x00 => {Cpu::rlc_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x01 => {Cpu::rlc_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x02 => {Cpu::rlc_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x03 => {Cpu::rlc_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x04 => {Cpu::rlc_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x05 => {Cpu::rlc_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x06 => {Cpu::rlc_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x07 => {Cpu::rlc_r8(&mut self.reg_a, &mut self.reg_f);},
+                0x08 => {Cpu::rrc_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x09 => {Cpu::rrc_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x0A => {Cpu::rrc_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x0B => {Cpu::rrc_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x0C => {Cpu::rrc_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x0D => {Cpu::rrc_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x0E => {Cpu::rrc_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x0F => {Cpu::rrc_r8(&mut self.reg_a, &mut self.reg_f);},
+                0x10 => {Cpu::rl_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x11 => {Cpu::rl_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x12 => {Cpu::rl_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x13 => {Cpu::rl_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x14 => {Cpu::rl_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x15 => {Cpu::rl_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x16 => {Cpu::rl_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x17 => {Cpu::rl_r8(&mut self.reg_a, &mut self.reg_f);},
+                0x18 => {Cpu::rr_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x19 => {Cpu::rr_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x1A => {Cpu::rr_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x1B => {Cpu::rr_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x1C => {Cpu::rr_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x1D => {Cpu::rr_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x1E => {Cpu::rr_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x1F => {Cpu::rr_r8(&mut self.reg_a, &mut self.reg_f);},
+                0x20 => {Cpu::sla_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x21 => {Cpu::sla_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x22 => {Cpu::sla_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x23 => {Cpu::sla_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x24 => {Cpu::sla_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x25 => {Cpu::sla_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x26 => {Cpu::sla_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x27 => {Cpu::sla_r8(&mut self.reg_a, &mut self.reg_f);},
+                0x28 => {Cpu::sra_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x29 => {Cpu::sra_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x2A => {Cpu::sra_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x2B => {Cpu::sra_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x2C => {Cpu::sra_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x2D => {Cpu::sra_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x2E => {Cpu::sra_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x2F => {Cpu::sra_r8(&mut self.reg_a, &mut self.reg_f);},
+                0x30 => {Cpu::swap_r8(&mut self.reg_b);},
+                0x31 => {Cpu::swap_r8(&mut self.reg_c);},
+                0x32 => {Cpu::swap_r8(&mut self.reg_d);},
+                0x33 => {Cpu::swap_r8(&mut self.reg_e);},
+                0x34 => {Cpu::swap_r8(&mut self.reg_h);},
+                0x35 => {Cpu::swap_r8(&mut self.reg_l);},
+                0x36 => {Cpu::swap_r16a(ram, &mut self.reg_h, &mut self.reg_l);},
+                0x37 => {Cpu::swap_r8(&mut self.reg_a);},
+                0x38 => {Cpu::srl_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x39 => {Cpu::srl_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x3A => {Cpu::srl_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x3B => {Cpu::srl_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x3C => {Cpu::srl_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x3D => {Cpu::srl_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x3E => {Cpu::srl_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x3F => {Cpu::srl_r8(&mut self.reg_a, &mut self.reg_f);},
+                0x40 => {Cpu::bit_r8(0, &mut self.reg_b, &mut self.reg_f);},
+                0x41 => {Cpu::bit_r8(0, &mut self.reg_c, &mut self.reg_f);},
+                0x42 => {Cpu::bit_r8(0, &mut self.reg_d, &mut self.reg_f);},
+                0x43 => {Cpu::bit_r8(0, &mut self.reg_e, &mut self.reg_f);},
+                0x44 => {Cpu::bit_r8(0, &mut self.reg_h, &mut self.reg_f);},
+                0x45 => {Cpu::bit_r8(0, &mut self.reg_l, &mut self.reg_f);},
+                0x46 => {Cpu::bit_r16a(ram, 0, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x47 => {Cpu::bit_r8(0, &mut self.reg_a, &mut self.reg_f);},
+                0x48 => {Cpu::bit_r8(1, &mut self.reg_b, &mut self.reg_f);},
+                0x49 => {Cpu::bit_r8(1, &mut self.reg_c, &mut self.reg_f);},
+                0x4A => {Cpu::bit_r8(1, &mut self.reg_d, &mut self.reg_f);},
+                0x4B => {Cpu::bit_r8(1, &mut self.reg_e, &mut self.reg_f);},
+                0x4C => {Cpu::bit_r8(1, &mut self.reg_h, &mut self.reg_f);},
+                0x4D => {Cpu::bit_r8(1, &mut self.reg_l, &mut self.reg_f);},
+                0x4E => {Cpu::bit_r16a(ram, 1, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x4F => {Cpu::bit_r8(1, &mut self.reg_a, &mut self.reg_f);},
+                0x50 => {Cpu::bit_r8(2, &mut self.reg_b, &mut self.reg_f);},
+                0x51 => {Cpu::bit_r8(2, &mut self.reg_c, &mut self.reg_f);},
+                0x52 => {Cpu::bit_r8(2, &mut self.reg_d, &mut self.reg_f);},
+                0x53 => {Cpu::bit_r8(2, &mut self.reg_e, &mut self.reg_f);},
+                0x54 => {Cpu::bit_r8(2, &mut self.reg_h, &mut self.reg_f);},
+                0x55 => {Cpu::bit_r8(2, &mut self.reg_l, &mut self.reg_f);},
+                0x56 => {Cpu::bit_r16a(ram, 2, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x57 => {Cpu::bit_r8(2, &mut self.reg_a, &mut self.reg_f);},
+                0x58 => {Cpu::bit_r8(3, &mut self.reg_b, &mut self.reg_f);},
+                0x59 => {Cpu::bit_r8(3, &mut self.reg_c, &mut self.reg_f);},
+                0x5A => {Cpu::bit_r8(3, &mut self.reg_d, &mut self.reg_f);},
+                0x5B => {Cpu::bit_r8(3, &mut self.reg_e, &mut self.reg_f);},
+                0x5C => {Cpu::bit_r8(3, &mut self.reg_h, &mut self.reg_f);},
+                0x5D => {Cpu::bit_r8(3, &mut self.reg_l, &mut self.reg_f);},
+                0x5E => {Cpu::bit_r16a(ram, 3, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x5F => {Cpu::bit_r8(3, &mut self.reg_a, &mut self.reg_f);},
+                0x60 => {Cpu::bit_r8(4, &mut self.reg_b, &mut self.reg_f);},
+                0x61 => {Cpu::bit_r8(4, &mut self.reg_c, &mut self.reg_f);},
+                0x62 => {Cpu::bit_r8(4, &mut self.reg_d, &mut self.reg_f);},
+                0x63 => {Cpu::bit_r8(4, &mut self.reg_e, &mut self.reg_f);},
+                0x64 => {Cpu::bit_r8(4, &mut self.reg_h, &mut self.reg_f);},
+                0x65 => {Cpu::bit_r8(4, &mut self.reg_l, &mut self.reg_f);},
+                0x66 => {Cpu::bit_r16a(ram, 4, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x67 => {Cpu::bit_r8(4, &mut self.reg_a, &mut self.reg_f);},
+                0x68 => {Cpu::bit_r8(5, &mut self.reg_b, &mut self.reg_f);},
+                0x69 => {Cpu::bit_r8(5, &mut self.reg_c, &mut self.reg_f);},
+                0x6A => {Cpu::bit_r8(5, &mut self.reg_d, &mut self.reg_f);},
+                0x6B => {Cpu::bit_r8(5, &mut self.reg_e, &mut self.reg_f);},
+                0x6C => {Cpu::bit_r8(5, &mut self.reg_h, &mut self.reg_f);},
+                0x6D => {Cpu::bit_r8(5, &mut self.reg_l, &mut self.reg_f);},
+                0x6E => {Cpu::bit_r16a(ram, 5, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x6F => {Cpu::bit_r8(5, &mut self.reg_a, &mut self.reg_f);},
+                0x70 => {Cpu::bit_r8(6, &mut self.reg_b, &mut self.reg_f);},
+                0x71 => {Cpu::bit_r8(6, &mut self.reg_c, &mut self.reg_f);},
+                0x72 => {Cpu::bit_r8(6, &mut self.reg_d, &mut self.reg_f);},
+                0x73 => {Cpu::bit_r8(6, &mut self.reg_e, &mut self.reg_f);},
+                0x74 => {Cpu::bit_r8(6, &mut self.reg_h, &mut self.reg_f);},
+                0x75 => {Cpu::bit_r8(6, &mut self.reg_l, &mut self.reg_f);},
+                0x76 => {Cpu::bit_r16a(ram, 6, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x77 => {Cpu::bit_r8(6, &mut self.reg_a, &mut self.reg_f);},
+                0x78 => {Cpu::bit_r8(7, &mut self.reg_b, &mut self.reg_f);},
+                0x79 => {Cpu::bit_r8(7, &mut self.reg_c, &mut self.reg_f);},
+                0x7A => {Cpu::bit_r8(7, &mut self.reg_d, &mut self.reg_f);},
+                0x7B => {Cpu::bit_r8(7, &mut self.reg_e, &mut self.reg_f);},
+                0x7C => {Cpu::bit_r8(7, &mut self.reg_h, &mut self.reg_f);},
+                0x7D => {Cpu::bit_r8(7, &mut self.reg_l, &mut self.reg_f);},
+                0x7E => {Cpu::bit_r16a(ram, 7, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x7F => {Cpu::bit_r8(7, &mut self.reg_a, &mut self.reg_f);},
+                0x80 => {Cpu::res_r8(0, &mut self.reg_b);},
+                0x81 => {Cpu::res_r8(0, &mut self.reg_c);},
+                0x82 => {Cpu::res_r8(0, &mut self.reg_d);},
+                0x83 => {Cpu::res_r8(0, &mut self.reg_e);},
+                0x84 => {Cpu::res_r8(0, &mut self.reg_h);},
+                0x85 => {Cpu::res_r8(0, &mut self.reg_l);},
+                0x86 => {Cpu::res_r16a(ram, 0, &mut self.reg_h, &mut self.reg_l);},
+                0x87 => {Cpu::res_r8(0, &mut self.reg_a);},
+                0x88 => {Cpu::res_r8(1, &mut self.reg_b);},
+                0x89 => {Cpu::res_r8(1, &mut self.reg_c);},
+                0x8A => {Cpu::res_r8(1, &mut self.reg_d);},
+                0x8B => {Cpu::res_r8(1, &mut self.reg_e);},
+                0x8C => {Cpu::res_r8(1, &mut self.reg_h);},
+                0x8D => {Cpu::res_r8(1, &mut self.reg_l);},
+                0x8E => {Cpu::res_r16a(ram, 1, &mut self.reg_h, &mut self.reg_l);},
+                0x8F => {Cpu::res_r8(1, &mut self.reg_a);},
+                0x90 => {Cpu::res_r8(2, &mut self.reg_b);},
+                0x91 => {Cpu::res_r8(2, &mut self.reg_c);},
+                0x92 => {Cpu::res_r8(2, &mut self.reg_d);},
+                0x93 => {Cpu::res_r8(2, &mut self.reg_e);},
+                0x94 => {Cpu::res_r8(2, &mut self.reg_h);},
+                0x95 => {Cpu::res_r8(2, &mut self.reg_l);},
+                0x96 => {Cpu::res_r16a(ram, 2, &mut self.reg_h, &mut self.reg_l);},
+                0x97 => {Cpu::res_r8(2, &mut self.reg_a);},
+                0x98 => {Cpu::res_r8(3, &mut self.reg_b);},
+                0x99 => {Cpu::res_r8(3, &mut self.reg_c);},
+                0x9A => {Cpu::res_r8(3, &mut self.reg_d);},
+                0x9B => {Cpu::res_r8(3, &mut self.reg_e);},
+                0x9C => {Cpu::res_r8(3, &mut self.reg_h);},
+                0x9D => {Cpu::res_r8(3, &mut self.reg_l);},
+                0x9E => {Cpu::res_r16a(ram, 3, &mut self.reg_h, &mut self.reg_l);},
+                0x9F => {Cpu::res_r8(3, &mut self.reg_a);},
+                0xA0 => {Cpu::res_r8(4, &mut self.reg_b);},
+                0xA1 => {Cpu::res_r8(4, &mut self.reg_c);},
+                0xA2 => {Cpu::res_r8(4, &mut self.reg_d);},
+                0xA3 => {Cpu::res_r8(4, &mut self.reg_e);},
+                0xA4 => {Cpu::res_r8(4, &mut self.reg_h);},
+                0xA5 => {Cpu::res_r8(4, &mut self.reg_l);},
+                0xA6 => {Cpu::res_r16a(ram, 4, &mut self.reg_h, &mut self.reg_l);},
+                0xA7 => {Cpu::res_r8(4, &mut self.reg_a);},
+                0xA8 => {Cpu::res_r8(5, &mut self.reg_b);},
+                0xA9 => {Cpu::res_r8(5, &mut self.reg_c);},
+                0xAA => {Cpu::res_r8(5, &mut self.reg_d);},
+                0xAB => {Cpu::res_r8(5, &mut self.reg_e);},
+                0xAC => {Cpu::res_r8(5, &mut self.reg_h);},
+                0xAD => {Cpu::res_r8(5, &mut self.reg_l);},
+                0xAE => {Cpu::res_r16a(ram, 5, &mut self.reg_h, &mut self.reg_l);},
+                0xAF => {Cpu::res_r8(5, &mut self.reg_a);},
+                0xB0 => {Cpu::res_r8(6, &mut self.reg_b);},
+                0xB1 => {Cpu::res_r8(6, &mut self.reg_c);},
+                0xB2 => {Cpu::res_r8(6, &mut self.reg_d);},
+                0xB3 => {Cpu::res_r8(6, &mut self.reg_e);},
+                0xB4 => {Cpu::res_r8(6, &mut self.reg_h);},
+                0xB5 => {Cpu::res_r8(6, &mut self.reg_l);},
+                0xB6 => {Cpu::res_r16a(ram, 6, &mut self.reg_h, &mut self.reg_l);},
+                0xB7 => {Cpu::res_r8(6, &mut self.reg_a);},
+                0xB8 => {Cpu::res_r8(7, &mut self.reg_b);},
+                0xB9 => {Cpu::res_r8(7, &mut self.reg_c);},
+                0xBA => {Cpu::res_r8(7, &mut self.reg_d);},
+                0xBB => {Cpu::res_r8(7, &mut self.reg_e);},
+                0xBC => {Cpu::res_r8(7, &mut self.reg_h);},
+                0xBD => {Cpu::res_r8(7, &mut self.reg_l);},
+                0xBE => {Cpu::res_r16a(ram, 7, &mut self.reg_h, &mut self.reg_l);},
+                0xBF => {Cpu::res_r8(7, &mut self.reg_a);},
+                0xC0 => {Cpu::set_r8(0, &mut self.reg_b);},
+                0xC1 => {Cpu::set_r8(0, &mut self.reg_c);},
+                0xC2 => {Cpu::set_r8(0, &mut self.reg_d);},
+                0xC3 => {Cpu::set_r8(0, &mut self.reg_e);},
+                0xC4 => {Cpu::set_r8(0, &mut self.reg_h);},
+                0xC5 => {Cpu::set_r8(0, &mut self.reg_l);},
+                0xC6 => {Cpu::set_r16a(ram, 0, &mut self.reg_h, &mut self.reg_l);},
+                0xC7 => {Cpu::set_r8(0, &mut self.reg_a);},
+                0xC8 => {Cpu::set_r8(1, &mut self.reg_b);},
+                0xC9 => {Cpu::set_r8(1, &mut self.reg_c);},
+                0xCA => {Cpu::set_r8(1, &mut self.reg_d);},
+                0xCB => {Cpu::set_r8(1, &mut self.reg_e);},
+                0xCC => {Cpu::set_r8(1, &mut self.reg_h);},
+                0xCD => {Cpu::set_r8(1, &mut self.reg_l);},
+                0xCE => {Cpu::set_r16a(ram, 1, &mut self.reg_h, &mut self.reg_l);},
+                0xCF => {Cpu::set_r8(1, &mut self.reg_a);},
+                0xD0 => {Cpu::set_r8(2, &mut self.reg_b);},
+                0xD1 => {Cpu::set_r8(2, &mut self.reg_c);},
+                0xD2 => {Cpu::set_r8(2, &mut self.reg_d);},
+                0xD3 => {Cpu::set_r8(2, &mut self.reg_e);},
+                0xD4 => {Cpu::set_r8(2, &mut self.reg_h);},
+                0xD5 => {Cpu::set_r8(2, &mut self.reg_l);},
+                0xD6 => {Cpu::set_r16a(ram, 2, &mut self.reg_h, &mut self.reg_l);},
+                0xD7 => {Cpu::set_r8(2, &mut self.reg_a);},
+                0xD8 => {Cpu::set_r8(3, &mut self.reg_b);},
+                0xD9 => {Cpu::set_r8(3, &mut self.reg_c);},
+                0xDA => {Cpu::set_r8(3, &mut self.reg_d);},
+                0xDB => {Cpu::set_r8(3, &mut self.reg_e);},
+                0xDC => {Cpu::set_r8(3, &mut self.reg_h);},
+                0xDD => {Cpu::set_r8(3, &mut self.reg_l);},
+                0xDE => {Cpu::set_r16a(ram, 3, &mut self.reg_h, &mut self.reg_l);},
+                0xDF => {Cpu::set_r8(3, &mut self.reg_a);},
+                0xE0 => {Cpu::set_r8(4, &mut self.reg_b);},
+                0xE1 => {Cpu::set_r8(4, &mut self.reg_c);},
+                0xE2 => {Cpu::set_r8(4, &mut self.reg_d);},
+                0xE3 => {Cpu::set_r8(4, &mut self.reg_e);},
+                0xE4 => {Cpu::set_r8(4, &mut self.reg_h);},
+                0xE5 => {Cpu::set_r8(4, &mut self.reg_l);},
+                0xE6 => {Cpu::set_r16a(ram, 4, &mut self.reg_h, &mut self.reg_l);},
+                0xE7 => {Cpu::set_r8(4, &mut self.reg_a);},
+                0xE8 => {Cpu::set_r8(5, &mut self.reg_b);},
+                0xE9 => {Cpu::set_r8(5, &mut self.reg_c);},
+                0xEA => {Cpu::set_r8(5, &mut self.reg_d);},
+                0xEB => {Cpu::set_r8(5, &mut self.reg_e);},
+                0xEC => {Cpu::set_r8(5, &mut self.reg_h);},
+                0xED => {Cpu::set_r8(5, &mut self.reg_l);},
+                0xEE => {Cpu::set_r16a(ram, 5, &mut self.reg_h, &mut self.reg_l);},
+                0xEF => {Cpu::set_r8(5, &mut self.reg_a);},
+                0xF0 => {Cpu::set_r8(6, &mut self.reg_b);},
+                0xF1 => {Cpu::set_r8(6, &mut self.reg_c);},
+                0xF2 => {Cpu::set_r8(6, &mut self.reg_d);},
+                0xF3 => {Cpu::set_r8(6, &mut self.reg_e);},
+                0xF4 => {Cpu::set_r8(6, &mut self.reg_h);},
+                0xF5 => {Cpu::set_r8(6, &mut self.reg_l);},
+                0xF6 => {Cpu::set_r16a(ram, 6, &mut self.reg_h, &mut self.reg_l);},
+                0xF7 => {Cpu::set_r8(6, &mut self.reg_a);},
+                0xF8 => {Cpu::set_r8(7, &mut self.reg_b);},
+                0xF9 => {Cpu::set_r8(7, &mut self.reg_c);},
+                0xFA => {Cpu::set_r8(7, &mut self.reg_d);},
+                0xFB => {Cpu::set_r8(7, &mut self.reg_e);},
+                0xFC => {Cpu::set_r8(7, &mut self.reg_h);},
+                0xFD => {Cpu::set_r8(7, &mut self.reg_l);},
+                0xFE => {Cpu::set_r16a(ram, 7, &mut self.reg_h, &mut self.reg_l);},
+                0xFF => {Cpu::set_r8(7, &mut self.reg_a);}
             }
 
             self.pc.current_instruction_cycles += CB_INSTRUCTION_TIME_TABLE[cb_instruction as usize];
@@ -1960,11 +2078,11 @@ impl Cpu
     // sp: u16,
     // ram: Ram,
     // pc: ProgramCounter
-    #[allow(dead_code)]
-    fn aux_get_reg(&self, regnum: usize) -> u8 { self.regs[regnum] }
-    #[allow(dead_code)]
-    fn aux_get_sp(&self) -> u16 { self.sp }
-    #[allow(dead_code)]
-    fn aux_get_pc(&self) -> ProgramCounter { self.pc }
+    // #[allow(dead_code)]
+    // fn aux_get_reg(&self, regnum: usize) -> u8 { regnum }
+    // #[allow(dead_code)]
+    // fn aux_get_sp(&self) -> u16 { self.sp }
+    // #[allow(dead_code)]
+    // fn aux_get_pc(&self) -> ProgramCounter { self.pc }
 
 }

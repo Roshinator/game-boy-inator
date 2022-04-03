@@ -17,11 +17,11 @@ mod jump_branch_tests
     {
         let mut cpu = Cpu::new();
         cpu.regs[REG_F] = 0;
-        cpu.jp_flag_pc_16(Flag::FLAG_Z,0x69, 0x42);
+        cpu.jp_flag_pc_16(CpuFlags::FLAG_Z,0x69, 0x42);
         assert_eq!(cpu.pc.reg, 0);
         assert!(cpu.pc.should_increment);
         cpu.regs[REG_F] = 0b10000000;
-        cpu.jp_flag_pc_16(Flag::FLAG_Z,0x69, 0x42);
+        cpu.jp_flag_pc_16(CpuFlags::FLAG_Z,0x69, 0x42);
         assert_eq!(cpu.pc.reg, 0x6942);
         assert!(!cpu.pc.should_increment);
     }
@@ -30,11 +30,11 @@ mod jump_branch_tests
     {
         let mut cpu = Cpu::new();
         cpu.regs[REG_F] = 0b10000000;
-        cpu.jp_nflag_pc_16(Flag::FLAG_Z,0x69, 0x42);
+        cpu.jp_nflag_pc_16(CpuFlags::FLAG_Z,0x69, 0x42);
         assert_eq!(cpu.pc.reg, 0);
         assert!(cpu.pc.should_increment);
         cpu.regs[REG_F] = 0;
-        cpu.jp_nflag_pc_16(Flag::FLAG_Z,0x69, 0x42);
+        cpu.jp_nflag_pc_16(CpuFlags::FLAG_Z,0x69, 0x42);
         assert_eq!(cpu.pc.reg, 0x6942);
         assert!(!cpu.pc.should_increment);
     }
@@ -56,17 +56,17 @@ mod jump_branch_tests
     {
         let mut cpu = Cpu::new();
         cpu.regs[REG_F] = 0;
-        cpu.jr_flag_i8(Flag::FLAG_Z, 0x69);
+        cpu.jr_flag_i8(CpuFlags::FLAG_Z, 0x69);
         assert_eq!(cpu.pc.reg, 0);
         assert!(cpu.pc.should_increment);
-        cpu.jr_flag_i8(Flag::FLAG_Z, -0x69);
+        cpu.jr_flag_i8(CpuFlags::FLAG_Z, -0x69);
         assert_eq!(cpu.pc.reg, 0);
         assert!(cpu.pc.should_increment);
         cpu.regs[REG_F] = 0b10000000;
-        cpu.jr_flag_i8(Flag::FLAG_Z, 0x69);
+        cpu.jr_flag_i8(CpuFlags::FLAG_Z, 0x69);
         assert_eq!(cpu.pc.reg, 0x69);
         assert!(!cpu.pc.should_increment);
-        cpu.jr_flag_i8(Flag::FLAG_Z, -0x69);
+        cpu.jr_flag_i8(CpuFlags::FLAG_Z, -0x69);
         assert_eq!(cpu.pc.reg, 0);
         assert!(!cpu.pc.should_increment);
     }
@@ -76,17 +76,17 @@ mod jump_branch_tests
     {
         let mut cpu = Cpu::new();
         cpu.regs[REG_F] = 0b10000000;
-        cpu.jr_nflag_i8(Flag::FLAG_Z, 0x69);
+        cpu.jr_nflag_i8(CpuFlags::FLAG_Z, 0x69);
         assert_eq!(cpu.pc.reg, 0);
         assert!(cpu.pc.should_increment);
-        cpu.jr_nflag_i8(Flag::FLAG_Z, -0x69);
+        cpu.jr_nflag_i8(CpuFlags::FLAG_Z, -0x69);
         assert_eq!(cpu.pc.reg, 0);
         assert!(cpu.pc.should_increment);
         cpu.regs[REG_F] = 0;
-        cpu.jr_nflag_i8(Flag::FLAG_Z, 0x69);
+        cpu.jr_nflag_i8(CpuFlags::FLAG_Z, 0x69);
         assert_eq!(cpu.pc.reg, 0x69);
         assert!(!cpu.pc.should_increment);
-        cpu.jr_nflag_i8(Flag::FLAG_Z, -0x69);
+        cpu.jr_nflag_i8(CpuFlags::FLAG_Z, -0x69);
         assert_eq!(cpu.pc.reg, 0);
         assert!(!cpu.pc.should_increment);
     }
@@ -113,13 +113,13 @@ mod jump_branch_tests
         cpu.sp = 0x6969;
         cpu.pc.reg = 0x1234;
         cpu.regs[REG_F] = 0b00000000;
-        cpu.call_flag_16(&mut ram, Flag::FLAG_Z, 0x56, 0x78);
+        cpu.call_flag_16(&mut ram, CpuFlags::FLAG_Z, 0x56, 0x78);
         assert_eq!(cpu.pc.reg, 0x1234);
         assert_eq!(cpu.sp, 0x6969);
         assert_eq!(ram.read(0x6969 - 1), 0x0);
         assert_eq!(ram.read(0x6969 - 2), 0x0);
         cpu.regs[REG_F] = 0b10000000;
-        cpu.call_flag_16(&mut ram, Flag::FLAG_Z, 0x56, 0x78);
+        cpu.call_flag_16(&mut ram, CpuFlags::FLAG_Z, 0x56, 0x78);
         assert_eq!(cpu.pc.reg, 0x5678);
         assert_eq!(cpu.sp, 0x6967);
         assert_eq!(ram.read(0x6969 - 1), 0x12);
@@ -134,13 +134,13 @@ mod jump_branch_tests
         cpu.sp = 0x6969;
         cpu.pc.reg = 0x1234;
         cpu.regs[REG_F] = 0b10000000;
-        cpu.call_nflag_16(&mut ram, Flag::FLAG_Z, 0x56, 0x78);
+        cpu.call_nflag_16(&mut ram, CpuFlags::FLAG_Z, 0x56, 0x78);
         assert_eq!(cpu.pc.reg, 0x1234);
         assert_eq!(cpu.sp, 0x6969);
         assert_eq!(ram.read(0x6969 - 1), 0x0);
         assert_eq!(ram.read(0x6969 - 2), 0x0);
         cpu.regs[REG_F] = 0b00000000;
-        cpu.call_nflag_16(&mut ram, Flag::FLAG_Z, 0x56, 0x78);
+        cpu.call_nflag_16(&mut ram, CpuFlags::FLAG_Z, 0x56, 0x78);
         assert_eq!(cpu.pc.reg, 0x5678);
         assert_eq!(cpu.sp, 0x6967);
         assert_eq!(ram.read(0x6969 - 1), 0x12);
@@ -169,11 +169,11 @@ mod jump_branch_tests
         ram.write(0x6967, 0x34);
         cpu.sp = 0x6967;
         cpu.regs[REG_F] = 0b00000000;
-        cpu.ret_flag(&mut ram, Flag::FLAG_Z);
+        cpu.ret_flag(&mut ram, CpuFlags::FLAG_Z);
         assert_eq!(cpu.pc.reg, 0);
         assert_eq!(cpu.sp, 0x6967);
         cpu.regs[REG_F] = 0b10000000;
-        cpu.ret_flag(&mut ram, Flag::FLAG_Z);
+        cpu.ret_flag(&mut ram, CpuFlags::FLAG_Z);
         assert_eq!(cpu.pc.reg, 0x1234);
         assert_eq!(cpu.sp, 0x6969);
     }
@@ -187,11 +187,11 @@ mod jump_branch_tests
         ram.write(0x6967, 0x34);
         cpu.sp = 0x6967;
         cpu.regs[REG_F] = 0b10000000;
-        cpu.ret_nflag(&mut ram, Flag::FLAG_Z);
+        cpu.ret_nflag(&mut ram, CpuFlags::FLAG_Z);
         assert_eq!(cpu.pc.reg, 0);
         assert_eq!(cpu.sp, 0x6967);
         cpu.regs[REG_F] = 0b00000000;
-        cpu.ret_nflag(&mut ram, Flag::FLAG_Z);
+        cpu.ret_nflag(&mut ram, CpuFlags::FLAG_Z);
         assert_eq!(cpu.pc.reg, 0x1234);
         assert_eq!(cpu.sp, 0x6969);
     }
