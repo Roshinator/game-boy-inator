@@ -50,23 +50,7 @@ mod alu_tests
     }
 
     #[test]
-    fn test_inc_r16a()
-    {
-        let mut cpu = Cpu::new();
-        todo!();
-        //INCS cant be performed, flags not modified
-    }
-
-    #[test]
     fn test_dec_r8()
-    {
-        let mut cpu = Cpu::new();
-        todo!();
-        //INCS cant be performed, flags not modified
-    }
-
-    #[test]
-    fn test_dec_r16a()
     {
         let mut cpu = Cpu::new();
         todo!();
@@ -216,23 +200,6 @@ mod alu_tests
     }
 
     #[test]
-    fn test_and_r8_r16a()
-    {
-        let mut cpu = Cpu::new();
-        let mut ram = Ram::new();
-        cpu.regs[REG_A] = 0b10101011;
-        cpu.regs[REG_B] = 0x69;
-        cpu.regs[REG_C] = 0x42;
-        ram.write_rp(0x69, 0x42, 0b01010101);
-        cpu.and_r8_r16a(&mut ram, REG_A, REG_B, REG_C);
-        assert_eq!(cpu.regs[REG_A], 1);
-        assert_eq!(cpu.regs[REG_F], 0b00100000);
-        ram.write_rp(0x69, 0x42, 0b01010100);
-        cpu.and_r8_r16a(&mut ram, REG_A, REG_B, REG_C);
-        assert_eq!(cpu.regs[REG_F], 0b10100000);
-    }
-
-    #[test]
     fn test_xor_r8_r8()
     {
         let mut cpu = Cpu::new();
@@ -255,23 +222,6 @@ mod alu_tests
         assert_eq!(cpu.regs[REG_A], 0b11111110);
         assert_eq!(cpu.regs[REG_F], 0b00000000);
         cpu.xor_r8_8(REG_A, 0b11111110);
-        assert_eq!(cpu.regs[REG_F], 0b10000000);
-    }
-
-    #[test]
-    fn test_xor_r8_r16a()
-    {
-        let mut cpu = Cpu::new();
-        let mut ram = Ram::new();
-        cpu.regs[REG_A] = 0b10101011;
-        cpu.regs[REG_B] = 0x69;
-        cpu.regs[REG_C] = 0x42;
-        ram.write_rp(0x69, 0x42, 0b01010101);
-        cpu.xor_r8_r16a(&mut ram, REG_A, REG_B, REG_C);
-        assert_eq!(cpu.regs[REG_A], 0b11111110);
-        assert_eq!(cpu.regs[REG_F], 0b00000000);
-        ram.write_rp(0x69, 0x42, 0b11111110);
-        cpu.xor_r8_r16a(&mut ram, REG_A, REG_B, REG_C);
         assert_eq!(cpu.regs[REG_F], 0b10000000);
     }
 
@@ -300,24 +250,6 @@ mod alu_tests
         assert_eq!(cpu.regs[REG_F], 0b00000000);
         cpu.regs[REG_A] = 0b00000000;
         cpu.or_r8_8(REG_A, 0b00000000);
-        assert_eq!(cpu.regs[REG_F], 0b10000000);
-    }
-
-    #[test]
-    fn test_or_r8_r16a()
-    {
-        let mut cpu = Cpu::new();
-        let mut ram = Ram::new();
-        cpu.regs[REG_A] = 0b10101011;
-        cpu.regs[REG_B] = 0x69;
-        cpu.regs[REG_C] = 0x42;
-        ram.write_rp(0x69, 0x42, 0b01010101);
-        cpu.or_r8_r16a(&mut ram, REG_A, REG_B, REG_C);
-        assert_eq!(cpu.regs[REG_A], 0b11111111);
-        assert_eq!(cpu.regs[REG_F], 0b00000000);
-        cpu.regs[REG_A] = 0b00000000;
-        ram.write_rp(0x69, 0x42, 0b00000000);
-        cpu.or_r8_r16a(&mut ram, REG_A, REG_B, REG_C);
         assert_eq!(cpu.regs[REG_F], 0b10000000);
     }
 

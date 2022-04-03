@@ -1,8 +1,5 @@
-mod ld_tests;
-mod control_tests;
-mod alu_tests;
-mod jump_branch_tests;
-mod bitwise_tests;
+#[cfg(test)]
+mod tests;
 use crate::ram::{self, Ram};
 
 //in an AF situation, A is msh, F is lsh, little endian
@@ -156,16 +153,6 @@ impl Cpu
         *p1 = p2;
     }
 
-    fn ld_r16a_8(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, p2: u8)
-    {
-        ram.write_rp(*msh, *lsh, p2);
-    }
-
-    fn ld_16a_r8(ram: &mut Ram, msh: u8, lsh: u8, p2: &mut u8)
-    {
-        ram.write_rp(msh, lsh, *p2);
-    }
-
     fn ld_16a_sp(sp: &mut u16, ram: &mut Ram, msh: u8, lsh: u8)
     {
         let bytes = sp.to_le_bytes();
@@ -188,23 +175,6 @@ impl Cpu
     fn ld_sp_r16(sp: &mut u16, msh: &mut u8, lsh: &mut u8)
     {
         *sp = u16::from_le_bytes([*lsh, *msh]);
-    }
-
-    fn ld_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8)
-    {
-        let x = ram.read_rp(*msh, *lsh);
-        *p1 = x;
-    }
-
-    fn ld_r8_16a(ram: &mut Ram, p1: &mut u8, msh: u8, lsh: u8)
-    {
-        let x = ram.read_rp(msh, lsh);
-        *p1 = x;
-    }
-
-    fn ld_r16a_r8(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, p2: &mut u8)
-    {
-        ram.write_rp(*msh, *lsh, *p2);
     }
 
     // TODO: See if the flags are modified
@@ -241,32 +211,10 @@ impl Cpu
         flags.set(CpuFlags::FLAG_H, result.1);
     }
 
-    fn inc_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let result = ram.read_rp(
-            *msh, *lsh).overflowing_add(1);
-        ram.write_rp(*msh, *lsh, result.0);
-
-        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, result.1);
-    }
-
     fn dec_r8(reg: &mut u8, flags: &mut CpuFlags)
     {
         let result = reg.overflowing_sub(1);
         *reg = result.0;
-
-        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
-        flags.set(CpuFlags::FLAG_N, true);
-        flags.set(CpuFlags::FLAG_H, result.1);
-    }
-
-    fn dec_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let result = ram.read_rp(
-            *msh, *lsh).overflowing_sub(1);
-        ram.write_rp(*msh, *lsh, result.0);
 
         flags.set(CpuFlags::FLAG_Z, result.0 == 0);
         flags.set(CpuFlags::FLAG_N, true);
@@ -372,20 +320,6 @@ impl Cpu
         flags.set(CpuFlags::FLAG_Z, z);
     }
 
-    fn add_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let p2 = ram.read_rp(*msh, *lsh);
-        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
-        let result = p1.overflowing_add(p2);
-        *p1 = result.0;
-        let half_carry_post = (result.0 >> 4) & 1;
-
-        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
-        flags.set(CpuFlags::FLAG_H, half_carry_pre == half_carry_post);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_C, result.1);
-    }
-
     fn add_sp_i8(sp: &mut u16, p1: i8)
     {
         let conv = p1.unsigned_abs() as u16;
@@ -451,24 +385,6 @@ impl Cpu
         flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
-    fn adc_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
-        let p2 = ram.read_rp(*msh, *lsh);
-        let half_carry_pre1 = ((*p1 ^ p2) >> 4) & 1;
-        let result1 = p1.overflowing_add(p2);
-        let half_carry_post1 = (result1.0 >> 4) & 1;
-        let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
-        let result2 = result1.0.overflowing_add(carry);
-        *p1 = result2.0;
-        let half_carry_post2 = (result2.0 >> 4) & 1;
-
-        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
-        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
-    }
-
     //TODO: Check subtraction half carry calculations
     fn sub_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
@@ -500,20 +416,6 @@ impl Cpu
     {
         let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
         let result = p1.overflowing_sub(p2);
-        *p1 = result.0;
-        let half_carry_post = (result.0 >> 4) & 1;
-
-        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
-        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
-        flags.set(CpuFlags::FLAG_N, true);
-        flags.set(CpuFlags::FLAG_C, result.1);
-    }
-
-    fn sub_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let p2 = ram.read_rp(*msh, *lsh);
-        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
-        let result = p1.overflowing_add(p2);
         *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
@@ -574,24 +476,6 @@ impl Cpu
         flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
     }
 
-    fn sbc_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let carry = flags.contains(CpuFlags::FLAG_C) as u8;
-        let p2 = ram.read_rp(*msh, *lsh);
-        let half_carry_pre1 = ((*p1 ^ p2) >> 4) & 1;
-        let result1 = p1.overflowing_sub(p2);
-        let half_carry_post1 = (result1.0 >> 4) & 1;
-        let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
-        let result2 = result1.0.overflowing_sub(carry);
-        *p1 = result2.0;
-        let half_carry_post2 = (result2.0 >> 4) & 1;
-
-        flags.set(CpuFlags::FLAG_Z, result2.0 == 0);
-        flags.set(CpuFlags::FLAG_H, half_carry_pre1 != half_carry_post1 || half_carry_pre2 != half_carry_post2);
-        flags.set(CpuFlags::FLAG_N, true);
-        flags.set(CpuFlags::FLAG_C, result1.1 || result2.1);
-    }
-
     fn and_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
         *p1 &= *p2;
@@ -615,16 +499,6 @@ impl Cpu
     fn and_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
         *p1 &= p2;
-
-        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
-        flags.set(CpuFlags::FLAG_H, true);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_C, false);
-    }
-
-    fn and_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        *p1 &= ram.read_rp(*msh, *lsh);
 
         flags.set(CpuFlags::FLAG_Z, *p1 == 0);
         flags.set(CpuFlags::FLAG_H, true);
@@ -662,16 +536,6 @@ impl Cpu
         flags.set(CpuFlags::FLAG_C, false);
     }
 
-    fn xor_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        *p1 ^= ram.read_rp(*msh, *lsh);
-
-        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
-        flags.set(CpuFlags::FLAG_H, false);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_C, false);
-    }
-
     fn or_r8_r8(p1: &mut u8, p2: &mut u8, flags: &mut CpuFlags)
     {
         *p1 |= *p2;
@@ -695,16 +559,6 @@ impl Cpu
     fn or_r8_8(p1: &mut u8, p2: u8, flags: &mut CpuFlags)
     {
         *p1 |= p2;
-
-        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
-        flags.set(CpuFlags::FLAG_H, false);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_C, false);
-    }
-
-    fn or_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        *p1 |= ram.read_rp(*msh, *lsh);
 
         flags.set(CpuFlags::FLAG_Z, *p1 == 0);
         flags.set(CpuFlags::FLAG_H, false);
@@ -742,20 +596,6 @@ impl Cpu
     {
         let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
         let result = p1.overflowing_sub(p2);
-        *p1 = result.0;
-        let half_carry_post = (result.0 >> 4) & 1;
-
-        flags.set(CpuFlags::FLAG_Z, result.0 == 0);
-        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
-        flags.set(CpuFlags::FLAG_N, true);
-        flags.set(CpuFlags::FLAG_C, result.1);
-    }
-
-    fn cp_r8_r16a(ram: &mut Ram, p1: &mut u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let p2 = ram.read_rp(*msh, *lsh);
-        let half_carry_pre = ((*p1 ^ p2) >> 4) & 1;
-        let result = p1.overflowing_add(p2);
         *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
 
@@ -996,18 +836,6 @@ impl Cpu
         flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rlc_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let p1 = ram.read_rp(*msh, *lsh);
-        flags.set(CpuFlags::FLAG_C, (p1 >> 7) & 1 != 0);
-        let result = p1.rotate_left(1);
-        ram.write_rp(*msh, *lsh, result);
-
-        flags.set(CpuFlags::FLAG_Z, result == 0);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, false);
-    }
-
     fn rrc_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
         flags.set(CpuFlags::FLAG_C, *p1 & 1 != 0);
@@ -1026,18 +854,6 @@ impl Cpu
         *reg_a = reg_a.rotate_right(1);
 
         flags.set(CpuFlags::FLAG_Z, false);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, false);
-    }
-
-    fn rrc_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let p1 = ram.read_rp(*msh, *lsh);
-        flags.set(CpuFlags::FLAG_C, p1 & 1 != 0);
-        let result = p1.rotate_right(1);
-        ram.write_rp(*msh, *lsh, result);
-
-        flags.set(CpuFlags::FLAG_Z, result == 0);
         flags.set(CpuFlags::FLAG_N, false);
         flags.set(CpuFlags::FLAG_H, false);
     }
@@ -1066,19 +882,6 @@ impl Cpu
         flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rl_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let cin = flags.contains(CpuFlags::FLAG_C) as u8;
-        let p1 = ram.read_rp(*msh, *lsh);
-        flags.set(CpuFlags::FLAG_C, (p1 >> 7) & 1 != 0);
-        let result = (p1 << 1u8) | cin;
-        ram.write_rp(*msh, *lsh, result);
-
-        flags.set(CpuFlags::FLAG_Z, result == 0);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, false);
-    }
-
     fn rr_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
         let cin = flags.contains(CpuFlags::FLAG_C) as u8;
@@ -1103,37 +906,12 @@ impl Cpu
         flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn rr_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let cin = flags.contains(CpuFlags::FLAG_C) as u8;
-        let p1 = ram.read_rp(*msh, *lsh);
-        flags.set(CpuFlags::FLAG_C, p1 & 1 != 0);
-        let result = (p1 >> 1u8) | (cin << 7u8);
-        ram.write_rp(*msh, *lsh, result);
-
-        flags.set(CpuFlags::FLAG_Z, result == 0);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, false);
-    }
-
     fn sla_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
         flags.set(CpuFlags::FLAG_C, (*p1 >> 7) & 1 != 0);
         *p1 <<= 1u8;
 
         flags.set(CpuFlags::FLAG_Z, *p1 == 0);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, false);
-    }
-
-    fn sla_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let p1 = ram.read_rp(*msh, *lsh);
-        flags.set(CpuFlags::FLAG_C, (p1 >> 7) & 1 != 0);
-        let result = p1 << 1u8;
-        ram.write_rp(*msh, *lsh, result);
-
-        flags.set(CpuFlags::FLAG_Z, result == 0);
         flags.set(CpuFlags::FLAG_N, false);
         flags.set(CpuFlags::FLAG_H, false);
     }
@@ -1148,36 +926,12 @@ impl Cpu
         flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn sra_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let p1 = ram.read_rp(*msh, *lsh);
-        flags.set(CpuFlags::FLAG_C, p1 & 1 != 0);
-        let result =( p1 >> 1u8) | (p1 | 0b10000000u8);
-        ram.write_rp(*msh, *lsh, result);
-
-        flags.set(CpuFlags::FLAG_Z, result == 0);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, false);
-    }
-
     fn srl_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
         flags.set(CpuFlags::FLAG_C, *p1 & 1 != 0);
         *p1 >>= 1u8; //fill with leftmost
 
         flags.set(CpuFlags::FLAG_Z, *p1 == 0);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, false);
-    }
-
-    fn srl_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        let p1 = ram.read_rp(*msh, *lsh);
-        flags.set(CpuFlags::FLAG_C, p1 & 1 != 0);
-        let result = p1 >> 1u8;
-        ram.write_rp(*msh, *lsh, result);
-
-        flags.set(CpuFlags::FLAG_Z, result == 0);
         flags.set(CpuFlags::FLAG_N, false);
         flags.set(CpuFlags::FLAG_H, false);
     }
@@ -1189,14 +943,6 @@ impl Cpu
         *p1 = lower_to_upper_half | upper_to_lower_half;
     }
 
-    fn swap_r16a(ram: &mut Ram, msh: &mut u8, lsh: &mut u8)
-    {
-        let p1 = ram.read_rp(*msh, *lsh);
-        let lower_to_upper_half = p1 << 4u8;
-        let upper_to_lower_half = p1 >> 4u8;
-        ram.write_rp(*msh, *lsh, lower_to_upper_half | upper_to_lower_half);
-    }
-
     fn bit_r8(p1: u8, p2: &mut u8, flags: &mut CpuFlags)
     {
         flags.set(CpuFlags::FLAG_H, true);
@@ -1204,34 +950,14 @@ impl Cpu
         flags.set(CpuFlags::FLAG_Z, (*p2 & (1u8 << p1)) == 0);
     }
 
-    fn bit_r16a(ram: &mut Ram, p1: u8, msh: &mut u8, lsh: &mut u8, flags: &mut CpuFlags)
-    {
-        flags.set(CpuFlags::FLAG_H, true);
-        flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_Z,
-            (ram.read_rp(*msh, *lsh) & (1u8 << p1)) == 0);
-    }
-
     fn res_r8(p1: u8, p2: &mut u8)
     {
         *p2 &= !(1u8 << p1);
     }
 
-    fn res_r16a(ram: &mut Ram, p1: u8, msh: &mut u8, lsh: &mut u8)
-    {
-        ram.write_rp(*msh, *lsh,
-            ram.read_rp(*msh, *lsh) & (!(1u8 << p1)));
-    }
-
     fn set_r8(p1: u8, p2: &mut u8)
     {
         *p2 |= 1u8 << p1;
-    }
-
-    fn set_r16a(ram: &mut Ram, p1: u8, msh: &mut u8, lsh: &mut u8)
-    {
-        ram.write_rp(*msh, *lsh,
-            ram.read_rp(*msh, *lsh) | (1u8 << p1));
     }
 
     fn push_r16(ram: &mut Ram, sp: &mut u16, msh: &mut u8, lsh: &mut u8)
@@ -1377,7 +1103,7 @@ impl Cpu
                     let msh = self.aux_read_immediate_data(ram);
                     Cpu::ld_r16_16(&mut self.reg_b, &mut self.reg_c, msh, lsh);
                 },
-                0x02 => {Cpu::ld_r16a_r8(ram, &mut self.reg_b, &mut self.reg_c, &mut self.reg_a);},
+                0x02 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_b, self.reg_c), &mut self.reg_a);},
                 0x03 => {Cpu::inc_r16(&mut self.reg_b, &mut self.reg_c);},
                 0x04 => {Cpu::inc_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x05 => {Cpu::dec_r8(&mut self.reg_b, &mut self.reg_f);},
@@ -1392,7 +1118,7 @@ impl Cpu
                     Cpu::ld_16a_sp(&mut self.sp, ram, msh, lsh);
                 },
                 0x09 => {Cpu::add_r16_r16(&mut self.reg_h, &mut self.reg_l, &mut self.reg_b, &mut self.reg_c, &mut self.reg_f);},
-                0x0A => {Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_b, &mut self.reg_c);},
+                0x0A => {Cpu::ld_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_b, self.reg_c));},
                 0x0B => {Cpu::dec_r16(&mut self.reg_b, &mut self.reg_c);},
                 0x0C => {Cpu::inc_r8(&mut self.reg_c, &mut self.reg_f);},
                 0x0D => {Cpu::dec_r8(&mut self.reg_c, &mut self.reg_f);},
@@ -1407,7 +1133,7 @@ impl Cpu
                     let msh = self.aux_read_immediate_data(ram);
                     Cpu::ld_r16_16(&mut self.reg_d, &mut self.reg_e, msh, lsh);
                 },
-                0x12 => {Cpu::ld_r16a_r8(ram, &mut self.reg_d, &mut self.reg_e, &mut self.reg_a);},
+                0x12 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_d, self.reg_e), &mut self.reg_a);},
                 0x13 => {Cpu::inc_r16(&mut self.reg_d, &mut self.reg_e);},
                 0x14 => {Cpu::inc_r8(&mut self.reg_d, &mut self.reg_f);},
                 0x15 => {Cpu::dec_r8(&mut self.reg_d, &mut self.reg_f);},
@@ -1421,7 +1147,7 @@ impl Cpu
                     Cpu::jr_i8(&mut self.pc, immediate);
                 },
                 0x19 => {Cpu::add_r16_r16(&mut self.reg_h, &mut self.reg_l, &mut self.reg_d, &mut self.reg_e, &mut self.reg_f);},
-                0x1A => {Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_d, &mut self.reg_e);},
+                0x1A => {Cpu::ld_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_d, self.reg_e));},
                 0x1B => {Cpu::dec_r16(&mut self.reg_d, &mut self.reg_e);},
                 0x1C => {Cpu::inc_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x1D => {Cpu::dec_r8(&mut self.reg_e, &mut self.reg_f);},
@@ -1440,7 +1166,7 @@ impl Cpu
                     Cpu::ld_r16_16(&mut self.reg_h, &mut self.reg_l, msh, lsh);
                 },
                 0x22 => {
-                    Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_a);
+                    Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_a);
                     Cpu::inc_r16(&mut self.reg_h, &mut self.reg_l);
                 },
                 0x23 => {Cpu::inc_r16(&mut self.reg_h, &mut self.reg_l);},
@@ -1458,7 +1184,7 @@ impl Cpu
                 0x29 => {
                     Cpu::add_r16_r16_s(&mut self.reg_h, &mut self.reg_l, &mut self.reg_f)},
                 0x2A => {
-                    Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l);
+                    Cpu::ld_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l));
                     Cpu::inc_r16(&mut self.reg_h, &mut self.reg_l);
                 },
                 0x2B => {Cpu::dec_r16(&mut self.reg_h, &mut self.reg_l);},
@@ -1479,15 +1205,15 @@ impl Cpu
                     Cpu::ld_sp_16( &mut self.sp, msh, lsh);
                 },
                 0x32 => {
-                    Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_a);
+                    Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_a);
                     Cpu::dec_r16(&mut self.reg_h, &mut self.reg_l);
                 },
                 0x33 => {Cpu::inc_sp(&mut self.sp);},
-                0x34 => {Cpu::inc_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
-                0x35 => {Cpu::dec_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x34 => {Cpu::inc_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
+                0x35 => {Cpu::dec_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x36 => {
                     let num = self.aux_read_immediate_data(ram);
-                    Cpu::ld_r16a_8(ram, &mut self.reg_h, &mut self.reg_l, num);
+                    Cpu::ld_r8_8(ram.get_rp_ref(self.reg_h, self.reg_l), num);
                 },
                 0x37 => {Cpu::scf(&mut self.reg_f);},
                 0x38 => {
@@ -1496,7 +1222,7 @@ impl Cpu
                 },
                 0x39 => {Cpu::add_r16_sp( &mut self.reg_h, &mut self.reg_l, &mut self.sp, &mut self.reg_f);},
                 0x3A => {
-                    Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l);
+                    Cpu::ld_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l));
                     Cpu::dec_r16(&mut self.reg_h, &mut self.reg_l);
                 },
                 0x3B => {Cpu::dec_sp(&mut self.sp);},
@@ -1513,7 +1239,7 @@ impl Cpu
                 0x43 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_e);},
                 0x44 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_h);},
                 0x45 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_l);},
-                0x46 => {Cpu::ld_r8_r16a(ram, &mut self.reg_b, &mut self.reg_h, &mut self.reg_l);},
+                0x46 => {Cpu::ld_r8_r8(&mut self.reg_b, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x47 => {Cpu::ld_r8_r8(&mut self.reg_b, &mut self.reg_a);},
                 0x48 => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_b);},
                 0x49 => {Cpu::ld_r8_r8_s(&mut self.reg_c);},
@@ -1521,7 +1247,7 @@ impl Cpu
                 0x4B => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_e);},
                 0x4C => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_h);},
                 0x4D => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_l);},
-                0x4E => {Cpu::ld_r8_r16a(ram, &mut self.reg_c, &mut self.reg_h, &mut self.reg_l);},
+                0x4E => {Cpu::ld_r8_r8(&mut self.reg_c, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x4F => {Cpu::ld_r8_r8(&mut self.reg_c, &mut self.reg_a);},
                 0x50 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_b);},
                 0x51 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_c);},
@@ -1529,7 +1255,7 @@ impl Cpu
                 0x53 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_e);},
                 0x54 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_h);},
                 0x55 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_l);},
-                0x56 => {Cpu::ld_r8_r16a(ram, &mut self.reg_d, &mut self.reg_h, &mut self.reg_l);},
+                0x56 => {Cpu::ld_r8_r8(&mut self.reg_d, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x57 => {Cpu::ld_r8_r8(&mut self.reg_d, &mut self.reg_a);},
                 0x58 => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_b);},
                 0x59 => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_c);},
@@ -1537,7 +1263,7 @@ impl Cpu
                 0x5B => {Cpu::ld_r8_r8_s(&mut self.reg_e);},
                 0x5C => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_h);},
                 0x5D => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_l);},
-                0x5E => {Cpu::ld_r8_r16a(ram, &mut self.reg_e, &mut self.reg_h, &mut self.reg_l);},
+                0x5E => {Cpu::ld_r8_r8(&mut self.reg_e, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x5F => {Cpu::ld_r8_r8(&mut self.reg_e, &mut self.reg_a);},
                 0x60 => {Cpu::ld_r8_r8(&mut self.reg_h, &mut self.reg_b);},
                 0x61 => {Cpu::ld_r8_r8(&mut self.reg_h, &mut self.reg_c);},
@@ -1561,10 +1287,10 @@ impl Cpu
                     Cpu::ld_r8_r8(&mut self.reg_l, &mut ram_read);
                 },
                 0x6F => {Cpu::ld_r8_r8(&mut self.reg_l, &mut self.reg_a);},
-                0x70 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_b);},
-                0x71 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_c);},
-                0x72 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_d);},
-                0x73 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_e);},
+                0x70 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_b);},
+                0x71 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_c);},
+                0x72 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_d);},
+                0x73 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_e);},
                 0x74 => {
                     let mut ram_read = ram.get_rp_ref(self.reg_h, self.reg_l);
                     Cpu::ld_r8_r8(&mut ram_read, &mut self.reg_h);
@@ -1574,14 +1300,14 @@ impl Cpu
                     Cpu::ld_r8_r8(&mut ram_read, &mut self.reg_l);
                 },
                 0x76 => {self.halt();},
-                0x77 => {Cpu::ld_r16a_r8(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_a);},
+                0x77 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_a);},
                 0x78 => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_b);},
                 0x79 => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_c);},
                 0x7A => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_d);},
                 0x7B => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_e);},
                 0x7C => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_h);},
                 0x7D => {Cpu::ld_r8_r8(&mut self.reg_a, &mut self.reg_l);},
-                0x7E => {Cpu::ld_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l);},
+                0x7E => {Cpu::ld_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x7F => {Cpu::ld_r8_r8_s(&mut self.reg_a);},
                 0x80 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
                 0x81 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
@@ -1589,7 +1315,7 @@ impl Cpu
                 0x83 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
                 0x84 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
                 0x85 => {Cpu::add_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
-                0x86 => {Cpu::add_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x86 => {Cpu::add_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x87 => {Cpu::add_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
                 0x88 => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
                 0x89 => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
@@ -1597,7 +1323,7 @@ impl Cpu
                 0x8B => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
                 0x8C => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
                 0x8D => {Cpu::adc_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
-                0x8E => {Cpu::adc_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x8E => {Cpu::adc_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x8F => {Cpu::adc_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
                 0x90 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
                 0x91 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
@@ -1605,7 +1331,7 @@ impl Cpu
                 0x93 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
                 0x94 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
                 0x95 => {Cpu::sub_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
-                0x96 => {Cpu::sub_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x96 => {Cpu::sub_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x97 => {Cpu::sub_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
                 0x98 => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
                 0x99 => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
@@ -1613,7 +1339,7 @@ impl Cpu
                 0x9B => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
                 0x9C => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
                 0x9D => {Cpu::sbc_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
-                0x9E => {Cpu::sbc_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x9E => {Cpu::sbc_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x9F => {Cpu::sbc_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
                 0xA0 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
                 0xA1 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
@@ -1621,7 +1347,7 @@ impl Cpu
                 0xA3 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
                 0xA4 => {Cpu::and_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
                 0xA5 => {Cpu::and_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
-                0xA6 => {Cpu::and_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0xA6 => {Cpu::and_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0xA7 => {Cpu::and_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
                 0xA8 => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
                 0xA9 => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
@@ -1629,7 +1355,7 @@ impl Cpu
                 0xAB => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
                 0xAC => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
                 0xAD => {Cpu::xor_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
-                0xAE => {Cpu::xor_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0xAE => {Cpu::xor_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0xAF => {Cpu::xor_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
                 0xB0 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
                 0xB1 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
@@ -1637,7 +1363,7 @@ impl Cpu
                 0xB3 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
                 0xB4 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
                 0xB5 => {Cpu::or_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
-                0xB6 => {Cpu::or_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0xB6 => {Cpu::or_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0xB7 => {Cpu::or_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
                 0xB8 => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_b, &mut self.reg_f);},
                 0xB9 => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_c, &mut self.reg_f);},
@@ -1645,7 +1371,7 @@ impl Cpu
                 0xBB => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_e, &mut self.reg_f);},
                 0xBC => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_h, &mut self.reg_f);},
                 0xBD => {Cpu::cp_r8_r8(&mut self.reg_a, &mut self.reg_l, &mut self.reg_f);},
-                0xBE => {Cpu::cp_r8_r16a(ram, &mut self.reg_a, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0xBE => {Cpu::cp_r8_r8(&mut self.reg_a, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0xBF => {Cpu::cp_r8_r8_s(&mut self.reg_a, &mut self.reg_f);},
                 0xC0 => {Cpu::ret_nflag(ram, &mut self.pc, &mut self.sp, CpuFlags::FLAG_Z, &mut self.reg_f);},
                 0xC1 => {Cpu::pop_r16(ram, &mut self.sp, &mut self.reg_b, &mut self.reg_c);},
@@ -1731,10 +1457,10 @@ impl Cpu
                 0xDF => {Cpu::rst(ram, 0x18, &mut self.pc, &mut self.sp);},
                 0xE0 => {
                     let lsh = self.aux_read_immediate_data(ram);
-                    Cpu::ld_16a_r8(ram, 0xFF, lsh, &mut self.reg_a);
+                    Cpu::ld_r8_r8(ram.get_rp_ref(0xFF, lsh), &mut self.reg_a);
                 },
                 0xE1 => {Cpu::pop_r16(ram, &mut self.sp, &mut self.reg_h, &mut self.reg_l);},
-                0xE2 => {Cpu::ld_16a_r8(ram, 0xFF, self.reg_c, &mut self.reg_a);},
+                0xE2 => {Cpu::ld_r8_r8(ram.get_rp_ref(0xFF, self.reg_c), &mut self.reg_a);},
                 0xE3 => {self.invalid_instruction(0xE3);},
                 0xE4 => {self.invalid_instruction(0xE4);},
                 0xE5 => {Cpu::push_r16(ram, &mut self.sp, &mut self.reg_h, &mut self.reg_l);},
@@ -1751,7 +1477,7 @@ impl Cpu
                 0xEA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    Cpu::ld_16a_r8(ram, msh, lsh, &mut self.reg_a);
+                    Cpu::ld_r8_r8(ram.get_rp_ref(msh, lsh), &mut self.reg_a);
                 },
                 0xEB => {self.invalid_instruction(0xEB);},
                 0xEC => {self.invalid_instruction(0xEC);},
@@ -1763,10 +1489,10 @@ impl Cpu
                 0xEF => {Cpu::rst(ram, 0x28, &mut self.pc, &mut self.sp);},
                 0xF0 => {
                     let lsh = self.aux_read_immediate_data(ram);
-                    Cpu::ld_r8_16a(ram, &mut self.reg_a, 0xFF, lsh)
+                    Cpu::ld_r8_r8(&mut self.reg_a, ram.get_rp_ref(0xFF, lsh))
                 },
                 0xF1 => {Cpu::pop_r16(ram, &mut self.sp, &mut self.reg_a, &mut self.reg_f.bits);},
-                0xF2 => {Cpu::ld_r8_16a(ram, &mut self.reg_a, 0xFF, self.reg_c);},
+                0xF2 => {Cpu::ld_r8_r8(&mut self.reg_a, ram.get_rp_ref(0xFF, self.reg_c));},
                 0xF3 => {Cpu::di(&mut self.ime);},
                 0xF4 => {self.invalid_instruction(0xF4);},
                 0xF5 => {Cpu::push_r16(ram, &mut self.sp, &mut self.reg_a, &mut self.reg_f.bits);},
@@ -1783,7 +1509,7 @@ impl Cpu
                 0xFA => {
                     let lsh = self.aux_read_immediate_data(ram);
                     let msh = self.aux_read_immediate_data(ram);
-                    Cpu::ld_r8_16a(ram, &mut self.reg_a, msh, lsh);
+                    Cpu::ld_r8_r8(&mut self.reg_a, ram.get_rp_ref(msh, lsh));
                 },
                 0xFB => {Cpu::ei(&mut self.ime);},
                 0xFC => {self.invalid_instruction(0xFC);},
@@ -1811,7 +1537,7 @@ impl Cpu
                 0x03 => {Cpu::rlc_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x04 => {Cpu::rlc_r8(&mut self.reg_h, &mut self.reg_f);},
                 0x05 => {Cpu::rlc_r8(&mut self.reg_l, &mut self.reg_f);},
-                0x06 => {Cpu::rlc_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x06 => {Cpu::rlc_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x07 => {Cpu::rlc_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x08 => {Cpu::rrc_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x09 => {Cpu::rrc_r8(&mut self.reg_c, &mut self.reg_f);},
@@ -1819,7 +1545,7 @@ impl Cpu
                 0x0B => {Cpu::rrc_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x0C => {Cpu::rrc_r8(&mut self.reg_h, &mut self.reg_f);},
                 0x0D => {Cpu::rrc_r8(&mut self.reg_l, &mut self.reg_f);},
-                0x0E => {Cpu::rrc_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x0E => {Cpu::rrc_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x0F => {Cpu::rrc_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x10 => {Cpu::rl_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x11 => {Cpu::rl_r8(&mut self.reg_c, &mut self.reg_f);},
@@ -1827,7 +1553,7 @@ impl Cpu
                 0x13 => {Cpu::rl_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x14 => {Cpu::rl_r8(&mut self.reg_h, &mut self.reg_f);},
                 0x15 => {Cpu::rl_r8(&mut self.reg_l, &mut self.reg_f);},
-                0x16 => {Cpu::rl_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x16 => {Cpu::rl_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x17 => {Cpu::rl_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x18 => {Cpu::rr_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x19 => {Cpu::rr_r8(&mut self.reg_c, &mut self.reg_f);},
@@ -1835,7 +1561,7 @@ impl Cpu
                 0x1B => {Cpu::rr_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x1C => {Cpu::rr_r8(&mut self.reg_h, &mut self.reg_f);},
                 0x1D => {Cpu::rr_r8(&mut self.reg_l, &mut self.reg_f);},
-                0x1E => {Cpu::rr_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x1E => {Cpu::rr_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x1F => {Cpu::rr_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x20 => {Cpu::sla_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x21 => {Cpu::sla_r8(&mut self.reg_c, &mut self.reg_f);},
@@ -1843,7 +1569,7 @@ impl Cpu
                 0x23 => {Cpu::sla_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x24 => {Cpu::sla_r8(&mut self.reg_h, &mut self.reg_f);},
                 0x25 => {Cpu::sla_r8(&mut self.reg_l, &mut self.reg_f);},
-                0x26 => {Cpu::sla_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x26 => {Cpu::sla_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x27 => {Cpu::sla_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x28 => {Cpu::sra_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x29 => {Cpu::sra_r8(&mut self.reg_c, &mut self.reg_f);},
@@ -1851,7 +1577,7 @@ impl Cpu
                 0x2B => {Cpu::sra_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x2C => {Cpu::sra_r8(&mut self.reg_h, &mut self.reg_f);},
                 0x2D => {Cpu::sra_r8(&mut self.reg_l, &mut self.reg_f);},
-                0x2E => {Cpu::sra_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x2E => {Cpu::sra_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x2F => {Cpu::sra_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x30 => {Cpu::swap_r8(&mut self.reg_b);},
                 0x31 => {Cpu::swap_r8(&mut self.reg_c);},
@@ -1859,7 +1585,7 @@ impl Cpu
                 0x33 => {Cpu::swap_r8(&mut self.reg_e);},
                 0x34 => {Cpu::swap_r8(&mut self.reg_h);},
                 0x35 => {Cpu::swap_r8(&mut self.reg_l);},
-                0x36 => {Cpu::swap_r16a(ram, &mut self.reg_h, &mut self.reg_l);},
+                0x36 => {Cpu::swap_r8(ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x37 => {Cpu::swap_r8(&mut self.reg_a);},
                 0x38 => {Cpu::srl_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x39 => {Cpu::srl_r8(&mut self.reg_c, &mut self.reg_f);},
@@ -1867,7 +1593,7 @@ impl Cpu
                 0x3B => {Cpu::srl_r8(&mut self.reg_e, &mut self.reg_f);},
                 0x3C => {Cpu::srl_r8(&mut self.reg_h, &mut self.reg_f);},
                 0x3D => {Cpu::srl_r8(&mut self.reg_l, &mut self.reg_f);},
-                0x3E => {Cpu::srl_r16a(ram, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x3E => {Cpu::srl_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x3F => {Cpu::srl_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x40 => {Cpu::bit_r8(0, &mut self.reg_b, &mut self.reg_f);},
                 0x41 => {Cpu::bit_r8(0, &mut self.reg_c, &mut self.reg_f);},
@@ -1875,7 +1601,7 @@ impl Cpu
                 0x43 => {Cpu::bit_r8(0, &mut self.reg_e, &mut self.reg_f);},
                 0x44 => {Cpu::bit_r8(0, &mut self.reg_h, &mut self.reg_f);},
                 0x45 => {Cpu::bit_r8(0, &mut self.reg_l, &mut self.reg_f);},
-                0x46 => {Cpu::bit_r16a(ram, 0, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x46 => {Cpu::bit_r8(0, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x47 => {Cpu::bit_r8(0, &mut self.reg_a, &mut self.reg_f);},
                 0x48 => {Cpu::bit_r8(1, &mut self.reg_b, &mut self.reg_f);},
                 0x49 => {Cpu::bit_r8(1, &mut self.reg_c, &mut self.reg_f);},
@@ -1883,7 +1609,7 @@ impl Cpu
                 0x4B => {Cpu::bit_r8(1, &mut self.reg_e, &mut self.reg_f);},
                 0x4C => {Cpu::bit_r8(1, &mut self.reg_h, &mut self.reg_f);},
                 0x4D => {Cpu::bit_r8(1, &mut self.reg_l, &mut self.reg_f);},
-                0x4E => {Cpu::bit_r16a(ram, 1, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x4E => {Cpu::bit_r8(1, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x4F => {Cpu::bit_r8(1, &mut self.reg_a, &mut self.reg_f);},
                 0x50 => {Cpu::bit_r8(2, &mut self.reg_b, &mut self.reg_f);},
                 0x51 => {Cpu::bit_r8(2, &mut self.reg_c, &mut self.reg_f);},
@@ -1891,7 +1617,7 @@ impl Cpu
                 0x53 => {Cpu::bit_r8(2, &mut self.reg_e, &mut self.reg_f);},
                 0x54 => {Cpu::bit_r8(2, &mut self.reg_h, &mut self.reg_f);},
                 0x55 => {Cpu::bit_r8(2, &mut self.reg_l, &mut self.reg_f);},
-                0x56 => {Cpu::bit_r16a(ram, 2, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x56 => {Cpu::bit_r8(2, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x57 => {Cpu::bit_r8(2, &mut self.reg_a, &mut self.reg_f);},
                 0x58 => {Cpu::bit_r8(3, &mut self.reg_b, &mut self.reg_f);},
                 0x59 => {Cpu::bit_r8(3, &mut self.reg_c, &mut self.reg_f);},
@@ -1899,7 +1625,7 @@ impl Cpu
                 0x5B => {Cpu::bit_r8(3, &mut self.reg_e, &mut self.reg_f);},
                 0x5C => {Cpu::bit_r8(3, &mut self.reg_h, &mut self.reg_f);},
                 0x5D => {Cpu::bit_r8(3, &mut self.reg_l, &mut self.reg_f);},
-                0x5E => {Cpu::bit_r16a(ram, 3, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x5E => {Cpu::bit_r8(3, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x5F => {Cpu::bit_r8(3, &mut self.reg_a, &mut self.reg_f);},
                 0x60 => {Cpu::bit_r8(4, &mut self.reg_b, &mut self.reg_f);},
                 0x61 => {Cpu::bit_r8(4, &mut self.reg_c, &mut self.reg_f);},
@@ -1907,7 +1633,7 @@ impl Cpu
                 0x63 => {Cpu::bit_r8(4, &mut self.reg_e, &mut self.reg_f);},
                 0x64 => {Cpu::bit_r8(4, &mut self.reg_h, &mut self.reg_f);},
                 0x65 => {Cpu::bit_r8(4, &mut self.reg_l, &mut self.reg_f);},
-                0x66 => {Cpu::bit_r16a(ram, 4, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x66 => {Cpu::bit_r8(4, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x67 => {Cpu::bit_r8(4, &mut self.reg_a, &mut self.reg_f);},
                 0x68 => {Cpu::bit_r8(5, &mut self.reg_b, &mut self.reg_f);},
                 0x69 => {Cpu::bit_r8(5, &mut self.reg_c, &mut self.reg_f);},
@@ -1915,7 +1641,7 @@ impl Cpu
                 0x6B => {Cpu::bit_r8(5, &mut self.reg_e, &mut self.reg_f);},
                 0x6C => {Cpu::bit_r8(5, &mut self.reg_h, &mut self.reg_f);},
                 0x6D => {Cpu::bit_r8(5, &mut self.reg_l, &mut self.reg_f);},
-                0x6E => {Cpu::bit_r16a(ram, 5, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x6E => {Cpu::bit_r8(5, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x6F => {Cpu::bit_r8(5, &mut self.reg_a, &mut self.reg_f);},
                 0x70 => {Cpu::bit_r8(6, &mut self.reg_b, &mut self.reg_f);},
                 0x71 => {Cpu::bit_r8(6, &mut self.reg_c, &mut self.reg_f);},
@@ -1923,7 +1649,7 @@ impl Cpu
                 0x73 => {Cpu::bit_r8(6, &mut self.reg_e, &mut self.reg_f);},
                 0x74 => {Cpu::bit_r8(6, &mut self.reg_h, &mut self.reg_f);},
                 0x75 => {Cpu::bit_r8(6, &mut self.reg_l, &mut self.reg_f);},
-                0x76 => {Cpu::bit_r16a(ram, 6, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x76 => {Cpu::bit_r8(6, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x77 => {Cpu::bit_r8(6, &mut self.reg_a, &mut self.reg_f);},
                 0x78 => {Cpu::bit_r8(7, &mut self.reg_b, &mut self.reg_f);},
                 0x79 => {Cpu::bit_r8(7, &mut self.reg_c, &mut self.reg_f);},
@@ -1931,7 +1657,7 @@ impl Cpu
                 0x7B => {Cpu::bit_r8(7, &mut self.reg_e, &mut self.reg_f);},
                 0x7C => {Cpu::bit_r8(7, &mut self.reg_h, &mut self.reg_f);},
                 0x7D => {Cpu::bit_r8(7, &mut self.reg_l, &mut self.reg_f);},
-                0x7E => {Cpu::bit_r16a(ram, 7, &mut self.reg_h, &mut self.reg_l, &mut self.reg_f);},
+                0x7E => {Cpu::bit_r8(7, ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x7F => {Cpu::bit_r8(7, &mut self.reg_a, &mut self.reg_f);},
                 0x80 => {Cpu::res_r8(0, &mut self.reg_b);},
                 0x81 => {Cpu::res_r8(0, &mut self.reg_c);},
@@ -1939,7 +1665,7 @@ impl Cpu
                 0x83 => {Cpu::res_r8(0, &mut self.reg_e);},
                 0x84 => {Cpu::res_r8(0, &mut self.reg_h);},
                 0x85 => {Cpu::res_r8(0, &mut self.reg_l);},
-                0x86 => {Cpu::res_r16a(ram, 0, &mut self.reg_h, &mut self.reg_l);},
+                0x86 => {Cpu::res_r8(0, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x87 => {Cpu::res_r8(0, &mut self.reg_a);},
                 0x88 => {Cpu::res_r8(1, &mut self.reg_b);},
                 0x89 => {Cpu::res_r8(1, &mut self.reg_c);},
@@ -1947,7 +1673,7 @@ impl Cpu
                 0x8B => {Cpu::res_r8(1, &mut self.reg_e);},
                 0x8C => {Cpu::res_r8(1, &mut self.reg_h);},
                 0x8D => {Cpu::res_r8(1, &mut self.reg_l);},
-                0x8E => {Cpu::res_r16a(ram, 1, &mut self.reg_h, &mut self.reg_l);},
+                0x8E => {Cpu::res_r8(1, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x8F => {Cpu::res_r8(1, &mut self.reg_a);},
                 0x90 => {Cpu::res_r8(2, &mut self.reg_b);},
                 0x91 => {Cpu::res_r8(2, &mut self.reg_c);},
@@ -1955,7 +1681,7 @@ impl Cpu
                 0x93 => {Cpu::res_r8(2, &mut self.reg_e);},
                 0x94 => {Cpu::res_r8(2, &mut self.reg_h);},
                 0x95 => {Cpu::res_r8(2, &mut self.reg_l);},
-                0x96 => {Cpu::res_r16a(ram, 2, &mut self.reg_h, &mut self.reg_l);},
+                0x96 => {Cpu::res_r8(2, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x97 => {Cpu::res_r8(2, &mut self.reg_a);},
                 0x98 => {Cpu::res_r8(3, &mut self.reg_b);},
                 0x99 => {Cpu::res_r8(3, &mut self.reg_c);},
@@ -1963,7 +1689,7 @@ impl Cpu
                 0x9B => {Cpu::res_r8(3, &mut self.reg_e);},
                 0x9C => {Cpu::res_r8(3, &mut self.reg_h);},
                 0x9D => {Cpu::res_r8(3, &mut self.reg_l);},
-                0x9E => {Cpu::res_r16a(ram, 3, &mut self.reg_h, &mut self.reg_l);},
+                0x9E => {Cpu::res_r8(3, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0x9F => {Cpu::res_r8(3, &mut self.reg_a);},
                 0xA0 => {Cpu::res_r8(4, &mut self.reg_b);},
                 0xA1 => {Cpu::res_r8(4, &mut self.reg_c);},
@@ -1971,7 +1697,7 @@ impl Cpu
                 0xA3 => {Cpu::res_r8(4, &mut self.reg_e);},
                 0xA4 => {Cpu::res_r8(4, &mut self.reg_h);},
                 0xA5 => {Cpu::res_r8(4, &mut self.reg_l);},
-                0xA6 => {Cpu::res_r16a(ram, 4, &mut self.reg_h, &mut self.reg_l);},
+                0xA6 => {Cpu::res_r8(4, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xA7 => {Cpu::res_r8(4, &mut self.reg_a);},
                 0xA8 => {Cpu::res_r8(5, &mut self.reg_b);},
                 0xA9 => {Cpu::res_r8(5, &mut self.reg_c);},
@@ -1979,7 +1705,7 @@ impl Cpu
                 0xAB => {Cpu::res_r8(5, &mut self.reg_e);},
                 0xAC => {Cpu::res_r8(5, &mut self.reg_h);},
                 0xAD => {Cpu::res_r8(5, &mut self.reg_l);},
-                0xAE => {Cpu::res_r16a(ram, 5, &mut self.reg_h, &mut self.reg_l);},
+                0xAE => {Cpu::res_r8(5, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xAF => {Cpu::res_r8(5, &mut self.reg_a);},
                 0xB0 => {Cpu::res_r8(6, &mut self.reg_b);},
                 0xB1 => {Cpu::res_r8(6, &mut self.reg_c);},
@@ -1987,7 +1713,7 @@ impl Cpu
                 0xB3 => {Cpu::res_r8(6, &mut self.reg_e);},
                 0xB4 => {Cpu::res_r8(6, &mut self.reg_h);},
                 0xB5 => {Cpu::res_r8(6, &mut self.reg_l);},
-                0xB6 => {Cpu::res_r16a(ram, 6, &mut self.reg_h, &mut self.reg_l);},
+                0xB6 => {Cpu::res_r8(6, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xB7 => {Cpu::res_r8(6, &mut self.reg_a);},
                 0xB8 => {Cpu::res_r8(7, &mut self.reg_b);},
                 0xB9 => {Cpu::res_r8(7, &mut self.reg_c);},
@@ -1995,7 +1721,7 @@ impl Cpu
                 0xBB => {Cpu::res_r8(7, &mut self.reg_e);},
                 0xBC => {Cpu::res_r8(7, &mut self.reg_h);},
                 0xBD => {Cpu::res_r8(7, &mut self.reg_l);},
-                0xBE => {Cpu::res_r16a(ram, 7, &mut self.reg_h, &mut self.reg_l);},
+                0xBE => {Cpu::res_r8(7, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xBF => {Cpu::res_r8(7, &mut self.reg_a);},
                 0xC0 => {Cpu::set_r8(0, &mut self.reg_b);},
                 0xC1 => {Cpu::set_r8(0, &mut self.reg_c);},
@@ -2003,7 +1729,7 @@ impl Cpu
                 0xC3 => {Cpu::set_r8(0, &mut self.reg_e);},
                 0xC4 => {Cpu::set_r8(0, &mut self.reg_h);},
                 0xC5 => {Cpu::set_r8(0, &mut self.reg_l);},
-                0xC6 => {Cpu::set_r16a(ram, 0, &mut self.reg_h, &mut self.reg_l);},
+                0xC6 => {Cpu::set_r8(0, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xC7 => {Cpu::set_r8(0, &mut self.reg_a);},
                 0xC8 => {Cpu::set_r8(1, &mut self.reg_b);},
                 0xC9 => {Cpu::set_r8(1, &mut self.reg_c);},
@@ -2011,7 +1737,7 @@ impl Cpu
                 0xCB => {Cpu::set_r8(1, &mut self.reg_e);},
                 0xCC => {Cpu::set_r8(1, &mut self.reg_h);},
                 0xCD => {Cpu::set_r8(1, &mut self.reg_l);},
-                0xCE => {Cpu::set_r16a(ram, 1, &mut self.reg_h, &mut self.reg_l);},
+                0xCE => {Cpu::set_r8(1, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xCF => {Cpu::set_r8(1, &mut self.reg_a);},
                 0xD0 => {Cpu::set_r8(2, &mut self.reg_b);},
                 0xD1 => {Cpu::set_r8(2, &mut self.reg_c);},
@@ -2019,7 +1745,7 @@ impl Cpu
                 0xD3 => {Cpu::set_r8(2, &mut self.reg_e);},
                 0xD4 => {Cpu::set_r8(2, &mut self.reg_h);},
                 0xD5 => {Cpu::set_r8(2, &mut self.reg_l);},
-                0xD6 => {Cpu::set_r16a(ram, 2, &mut self.reg_h, &mut self.reg_l);},
+                0xD6 => {Cpu::set_r8(2, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xD7 => {Cpu::set_r8(2, &mut self.reg_a);},
                 0xD8 => {Cpu::set_r8(3, &mut self.reg_b);},
                 0xD9 => {Cpu::set_r8(3, &mut self.reg_c);},
@@ -2027,7 +1753,7 @@ impl Cpu
                 0xDB => {Cpu::set_r8(3, &mut self.reg_e);},
                 0xDC => {Cpu::set_r8(3, &mut self.reg_h);},
                 0xDD => {Cpu::set_r8(3, &mut self.reg_l);},
-                0xDE => {Cpu::set_r16a(ram, 3, &mut self.reg_h, &mut self.reg_l);},
+                0xDE => {Cpu::set_r8(3, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xDF => {Cpu::set_r8(3, &mut self.reg_a);},
                 0xE0 => {Cpu::set_r8(4, &mut self.reg_b);},
                 0xE1 => {Cpu::set_r8(4, &mut self.reg_c);},
@@ -2035,7 +1761,7 @@ impl Cpu
                 0xE3 => {Cpu::set_r8(4, &mut self.reg_e);},
                 0xE4 => {Cpu::set_r8(4, &mut self.reg_h);},
                 0xE5 => {Cpu::set_r8(4, &mut self.reg_l);},
-                0xE6 => {Cpu::set_r16a(ram, 4, &mut self.reg_h, &mut self.reg_l);},
+                0xE6 => {Cpu::set_r8(4, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xE7 => {Cpu::set_r8(4, &mut self.reg_a);},
                 0xE8 => {Cpu::set_r8(5, &mut self.reg_b);},
                 0xE9 => {Cpu::set_r8(5, &mut self.reg_c);},
@@ -2043,7 +1769,7 @@ impl Cpu
                 0xEB => {Cpu::set_r8(5, &mut self.reg_e);},
                 0xEC => {Cpu::set_r8(5, &mut self.reg_h);},
                 0xED => {Cpu::set_r8(5, &mut self.reg_l);},
-                0xEE => {Cpu::set_r16a(ram, 5, &mut self.reg_h, &mut self.reg_l);},
+                0xEE => {Cpu::set_r8(5, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xEF => {Cpu::set_r8(5, &mut self.reg_a);},
                 0xF0 => {Cpu::set_r8(6, &mut self.reg_b);},
                 0xF1 => {Cpu::set_r8(6, &mut self.reg_c);},
@@ -2051,7 +1777,7 @@ impl Cpu
                 0xF3 => {Cpu::set_r8(6, &mut self.reg_e);},
                 0xF4 => {Cpu::set_r8(6, &mut self.reg_h);},
                 0xF5 => {Cpu::set_r8(6, &mut self.reg_l);},
-                0xF6 => {Cpu::set_r16a(ram, 6, &mut self.reg_h, &mut self.reg_l);},
+                0xF6 => {Cpu::set_r8(6, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xF7 => {Cpu::set_r8(6, &mut self.reg_a);},
                 0xF8 => {Cpu::set_r8(7, &mut self.reg_b);},
                 0xF9 => {Cpu::set_r8(7, &mut self.reg_c);},
@@ -2059,7 +1785,7 @@ impl Cpu
                 0xFB => {Cpu::set_r8(7, &mut self.reg_e);},
                 0xFC => {Cpu::set_r8(7, &mut self.reg_h);},
                 0xFD => {Cpu::set_r8(7, &mut self.reg_l);},
-                0xFE => {Cpu::set_r16a(ram, 7, &mut self.reg_h, &mut self.reg_l);},
+                0xFE => {Cpu::set_r8(7, ram.get_rp_ref(self.reg_h, self.reg_l));},
                 0xFF => {Cpu::set_r8(7, &mut self.reg_a);}
             }
 

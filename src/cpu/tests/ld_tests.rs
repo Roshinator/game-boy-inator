@@ -46,26 +46,6 @@ mod ld_tests
     }
 
     #[test]
-    fn test_ld_r16a_8()
-    {
-        let mut cpu = Cpu::new();
-        (cpu.regs[REG_H], cpu.regs[REG_L]) = (0x69, 0x42);
-        let mut ram = Ram::new();
-        cpu.ld_r16a_8(&mut ram, REG_H, REG_L, 0x88);
-        assert_eq!(ram.read(0x6942), 0x88);
-    }
-
-    #[test]
-    fn test_ld_16a_r8()
-    {
-        let mut cpu = Cpu::new();
-        let mut ram = Ram::new();
-        cpu.regs[REG_D] = 0x88;
-        cpu.ld_16a_r8(&mut ram, 0x69, 0x42, REG_D);
-        assert_eq!(ram.read(0x6942), 0x88);
-    }
-
-    #[test]
     fn test_ld_16a_sp()
     {
         let mut cpu = Cpu::new();
@@ -95,37 +75,5 @@ mod ld_tests
         cpu.regs[REG_L] = 0x42;
         cpu.ld_sp_r16(REG_H, REG_L);
         assert_eq!(cpu.sp, 0x6942);
-    }
-
-    #[test]
-    fn test_ld_r8_r16a()
-    {
-        let mut cpu = Cpu::new();
-        (cpu.regs[REG_H], cpu.regs[REG_L]) = (0x12, 0x34);
-        let mut ram = Ram::new();
-        ram.write(0x1234, 0x69);
-        cpu.ld_r8_r16a(&mut ram, REG_A, REG_H, REG_L);
-        assert_eq!(cpu.regs[REG_A], 0x69);
-    }
-
-    #[test]
-    fn test_ld_r8_16a()
-    {
-        let mut cpu = Cpu::new();
-        let mut ram = Ram::new();
-        ram.write(0x1234, 0x69);
-        cpu.ld_r8_16a(&mut ram, REG_A, 0x12, 0x34);
-        assert_eq!(cpu.regs[REG_A], 0x69);
-    }
-
-    #[test]
-    fn test_ld_r16a_r8()
-    {
-        let mut cpu = Cpu::new();
-        let mut ram = Ram::new();
-        cpu.regs[REG_C] = 0x69;
-        (cpu.regs[REG_H], cpu.regs[REG_L]) = (0x12, 0x34);
-        cpu.ld_r16a_r8(&mut ram, REG_H, REG_L, REG_C);
-        assert_eq!(ram.read(0x1234), 0x69);
     }
 }
