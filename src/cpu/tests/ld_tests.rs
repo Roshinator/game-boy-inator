@@ -6,74 +6,83 @@ mod ld_tests
     #[test]
     fn test_ld_r16_16()
     {
-        let mut cpu = Cpu::new();
-        cpu.ld_r16_16(cpu::REG_H, cpu::REG_L,
+        let mut proc = Cpu::new();
+        Cpu::ld_r16_16(&mut proc.reg_h, &mut proc.reg_l,
             33, 36);
-        assert_eq!(cpu.regs[cpu::REG_H], 33);
-        assert_eq!(cpu.regs[cpu::REG_L], 36);
+        assert_eq!(proc.reg_h, 33);
+        assert_eq!(proc.reg_l, 36);
     }
 
     #[test]
     fn test_ld_hl_sp_plus()
     {
-        let mut cpu = Cpu::new();
-        cpu.sp = 0x11FF;
-        cpu.ld_hl_sp_plus(1);
-        assert_eq!(cpu.regs[REG_H], 0x12);
-        assert_eq!(cpu.regs[REG_L], 0x00);
-        cpu.ld_hl_sp_plus(-1);
-        assert_eq!(cpu.regs[REG_H], 0x11);
-        assert_eq!(cpu.regs[REG_L], 0xFE);
+        let mut proc = Cpu::new();
+        proc.sp = 0x11FF;
+        Cpu::ld_hl_sp_plus(&mut proc.sp, &mut proc.reg_h, &mut proc.reg_l, 1);
+        assert_eq!(proc.reg_h, 0x12);
+        assert_eq!(proc.reg_l, 0x00);
+        Cpu::ld_hl_sp_plus(&mut proc.sp, &mut proc.reg_h, &mut proc.reg_l,-1);
+        assert_eq!(proc.reg_h, 0x11);
+        assert_eq!(proc.reg_l, 0xFE);
         //CHECK CARRY FLAGS
     }
 
     #[test]
     fn test_ld_sp_16()
     {
-        let mut cpu = Cpu::new();
-        cpu.sp = 0;
-        cpu.ld_sp_16(0x69, 0x42);
-        assert_eq!(cpu.sp, 0x6942);
+        let mut proc = Cpu::new();
+        proc.sp = 0;
+        Cpu::ld_sp_16(&mut proc.sp, 0x69, 0x42);
+        assert_eq!(proc.sp, 0x6942);
     }
 
     #[test]
     fn test_ld_r8_8()
     {
-        let mut cpu = Cpu::new();
-        cpu.regs[REG_D] = 0;
-        cpu.ld_r8_8(REG_D, 0x69);
-        assert_eq!(cpu.regs[REG_D], 0x69);
+        let mut proc = Cpu::new();
+        proc.reg_d = 0;
+        Cpu::ld_r8_8(&mut proc.reg_d, 0x69);
+        assert_eq!(proc.reg_d, 0x69);
     }
 
     #[test]
     fn test_ld_16a_sp()
     {
-        let mut cpu = Cpu::new();
-        let mut ram = Ram::new();
-        cpu.sp = 0x1234;
-        cpu.ld_16a_sp(&mut ram, 0x69, 0x42);
-        assert_eq!(ram.read(0x6942), 0x34);
-        assert_eq!(ram.read(0x6942 + 1), 0x12);
+        let mut proc = Cpu::new();
+        let mut mem = Ram::new();
+        proc.sp = 0x1234;
+        Cpu::ld_16a_sp(&mut proc.sp, &mut mem, 0x69, 0x42);
+        assert_eq!(mem.read(0x6942), 0x34);
+        assert_eq!(mem.read(0x6942 + 1), 0x12);
     }
 
     #[test]
     fn test_ld_r8_r8()
     {
-        let mut cpu = Cpu::new();
-        cpu.regs[REG_A] = 0;
-        cpu.regs[REG_B] = 0x21;
-        cpu.ld_r8_r8(REG_A, REG_B);
-        assert_eq!(cpu.regs[REG_A], 0x21);
+        let mut proc = Cpu::new();
+        proc.reg_a = 0;
+        proc.reg_b = 0x21;
+        Cpu::ld_r8_r8(&mut proc.reg_a, &mut proc.reg_b);
+        assert_eq!(proc.reg_a, 0x21);
+    }
+
+    #[test]
+    fn test_ld_r8_r8_s()
+    {
+        let mut proc = Cpu::new();
+        proc.reg_a = 0x21;
+        Cpu::ld_r8_r8_s(&mut proc.reg_a);
+        assert_eq!(proc.reg_a, 0x21);
     }
 
     #[test]
     fn test_ld_sp_r16()
     {
-        let mut cpu = Cpu::new();
-        cpu.sp = 0;
-        cpu.regs[REG_H] = 0x69;
-        cpu.regs[REG_L] = 0x42;
-        cpu.ld_sp_r16(REG_H, REG_L);
-        assert_eq!(cpu.sp, 0x6942);
+        let mut proc = Cpu::new();
+        proc.sp = 0;
+        proc.reg_h = 0x69;
+        proc.reg_l = 0x42;
+        Cpu::ld_sp_r16(&mut proc.sp, &mut proc.reg_h, &mut proc.reg_l);
+        assert_eq!(proc.sp, 0x6942);
     }
 }
