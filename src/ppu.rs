@@ -212,7 +212,7 @@ impl Ppu
         if obj_on
         {
             let sprites = &self.sprite_buffer;
-            if sprites.len() >= 1
+            if !sprites.is_empty()
             {
                 let palette0 = ram.read(ram::OBP0);
                 let palette1 = ram.read(ram::OBP1);
@@ -291,7 +291,7 @@ impl Ppu
         }
         let tile_index = ram.read(*start + ((y_coord as u16 / 8) * 32 + x_coord as u16 / 8));
         let tile_addr = self.get_tile_addr(tile_index, y_coord % 8, low_bank);
-        return self.get_color_from_tilemap(&[ram.read(tile_addr), ram.read(tile_addr + 1)], x_coord % 8);
+        self.get_color_from_tilemap(&[ram.read(tile_addr), ram.read(tile_addr + 1)], x_coord % 8)
     }
 
     fn get_sprites_from_oam(&mut self, ram: &mut Ram, scan_num: u8) -> Vec<Sprite>
@@ -299,15 +299,14 @@ impl Ppu
         let mut sprites = Vec::<Sprite>::new();
         sprites.reserve_exact(11);
 
-        let sprite_height;
-        if (ram.read(ram::LCDC) & LcdcFlag::OBJ_SIZE_SELECT.bits) == 0
+        let sprite_height = if (ram.read(ram::LCDC) & LcdcFlag::OBJ_SIZE_SELECT.bits) == 0
         {
-            sprite_height = 8_u8;
+            8_u8
         }
         else
         {
-            sprite_height = 16_u8;
-        }
+            16_u8
+        };
 
         for oam_slot in (ram::OAM).step_by(4)
         {
@@ -339,6 +338,11 @@ impl Ppu
             }
 
         }
-        return sprites;
+        sprites
     }
+}
+
+impl Default for Ppu
+{
+    fn default() -> Self { Self::new() }
 }

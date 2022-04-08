@@ -167,9 +167,9 @@ impl Cpu
         *p1 = *p2;
     }
 
-    fn ld_r8_r8_s(p1: &mut u8)
+    fn ld_r8_r8_s(_p1: &mut u8)
     {
-        *p1 = *p1;
+        // *p1 = *p1; Basically a NOP
     }
 
     fn ld_sp_r16(sp: &mut u16, msh: &mut u8, lsh: &mut u8)
@@ -250,7 +250,7 @@ impl Cpu
 
     fn add_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((*p1 ^ *p1) >> 4) & 1;
+        let half_carry_pre = 0; //((*p1 ^ *p1) >> 4) & 1;
         let result = p1.overflowing_add(*p1);
         *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
@@ -354,7 +354,7 @@ impl Cpu
     fn adc_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
         let carry = flags.contains(CpuFlags::FLAG_C) as u8;
-        let half_carry_pre1 = ((*p1 ^ *p1) >> 4) & 1;
+        let half_carry_pre1 = 0; //((*p1 ^ *p1) >> 4) & 1;
         let result1 = p1.overflowing_add(*p1);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
@@ -401,7 +401,7 @@ impl Cpu
 
     fn sub_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((*p1 ^ *p1) >> 4) & 1;
+        let half_carry_pre = 0; //((*p1 ^ *p1) >> 4) & 1;
         let result = p1.overflowing_sub(*p1);
         *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
@@ -445,7 +445,7 @@ impl Cpu
     fn sbc_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
         let carry = flags.contains(CpuFlags::FLAG_C) as u8;
-        let half_carry_pre1 = ((*p1 ^ *p1) >> 4) & 1;
+        let half_carry_pre1 = 0; //((*p1 ^ *p1) >> 4) & 1;
         let result1 = p1.overflowing_sub(*p1);
         let half_carry_post1 = (result1.0 >> 4) & 1;
         let half_carry_pre2 = ((result1.0 ^ carry) >> 4) & 1;
@@ -581,7 +581,7 @@ impl Cpu
 
     fn cp_r8_r8_s(p1: &mut u8, flags: &mut CpuFlags)
     {
-        let half_carry_pre = ((*p1 ^ *p1) >> 4) & 1;
+        let half_carry_pre = 0; //((*p1 ^ *p1) >> 4) & 1;
         let result = p1.overflowing_sub(*p1);
         *p1 = result.0;
         let half_carry_post = (result.0 >> 4) & 1;
@@ -611,7 +611,7 @@ impl Cpu
         let bits_47 = (*reg_a >> 4) & 0b00001111;
         let h_before = flags.contains(CpuFlags::FLAG_H);
         let bits_03 = *reg_a & 0b00001111;
-        if flags.contains(CpuFlags::FLAG_N) == true //Add preceded instruction
+        if flags.contains(CpuFlags::FLAG_N) //Add preceded instruction
         {
             match (c_before, bits_47, h_before, bits_03)
             {
@@ -708,7 +708,7 @@ impl Cpu
 
     fn jp_flag_pc_16(pc: &mut ProgramCounter, flag: CpuFlags, msh: u8, lsh: u8, flags: &mut CpuFlags)
     {
-        if flags.contains(flag) == true
+        if flags.contains(flag)
         {
             Cpu::jp_pc_16(pc, msh, lsh);
         }
@@ -716,7 +716,7 @@ impl Cpu
 
     fn jp_nflag_pc_16(pc: &mut ProgramCounter, flag: CpuFlags, msh: u8, lsh: u8, flags: &mut CpuFlags)
     {
-        if flags.contains(flag) == false
+        if !flags.contains(flag)
         {
             Cpu::jp_pc_16(pc, msh, lsh);
         }
@@ -739,7 +739,7 @@ impl Cpu
 
     fn jr_flag_i8(pc: &mut ProgramCounter, flag: CpuFlags, p1: i8, flags: &mut CpuFlags)
     {
-        if flags.contains(flag) == true
+        if flags.contains(flag)
         {
             Cpu::jr_i8(pc, p1);
         }
@@ -747,7 +747,7 @@ impl Cpu
 
     fn jr_nflag_i8(pc: &mut ProgramCounter, flag: CpuFlags, p1: i8, flags: &mut CpuFlags)
     {
-        if flags.contains(flag) == false
+        if !flags.contains(flag)
         {
             Cpu::jr_i8(pc, p1);
         }
@@ -764,7 +764,7 @@ impl Cpu
 
     fn call_flag_16(ram: &mut Ram, flag: CpuFlags, msh: u8, lsh: u8, pc: &mut ProgramCounter, sp: &mut u16, flags: &mut CpuFlags)
     {
-        if flags.contains(flag) == true
+        if !flags.contains(flag)
         {
             Cpu::call_16(ram, msh, lsh, pc, sp);
         }
@@ -772,7 +772,7 @@ impl Cpu
 
     fn call_nflag_16(ram: &mut Ram, flag: CpuFlags, msh: u8, lsh: u8, pc: &mut ProgramCounter, sp: &mut u16, flags: &mut CpuFlags)
     {
-        if flags.contains(flag) == false
+        if !flags.contains(flag)
         {
             Cpu::call_16(ram, msh, lsh, pc, sp);
         }
@@ -788,7 +788,7 @@ impl Cpu
 
     fn ret_flag(ram: &mut Ram, pc: &mut ProgramCounter, sp: &mut u16, flag: CpuFlags, flags: &mut CpuFlags)
     {
-        if flags.contains(flag) == true
+        if !flags.contains(flag)
         {
             Cpu::ret(ram, pc, sp);
         }
@@ -796,7 +796,7 @@ impl Cpu
 
     fn ret_nflag(ram: &mut Ram, pc: &mut ProgramCounter, sp: &mut u16, flag: CpuFlags, flags: &mut CpuFlags)
     {
-        if flags.contains(flag) == false
+        if !flags.contains(flag)
         {
             Cpu::ret(ram, pc, sp);
         }
@@ -1292,12 +1292,12 @@ impl Cpu
                 0x72 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_d);},
                 0x73 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_e);},
                 0x74 => {
-                    let mut ram_read = ram.get_rp_ref(self.reg_h, self.reg_l);
-                    Cpu::ld_r8_r8(&mut ram_read, &mut self.reg_h);
+                    let ram_read = ram.get_rp_ref(self.reg_h, self.reg_l);
+                    Cpu::ld_r8_r8(ram_read, &mut self.reg_h);
                 },
                 0x75 => {
-                    let mut ram_read = ram.get_rp_ref(self.reg_h, self.reg_l);
-                    Cpu::ld_r8_r8(&mut ram_read, &mut self.reg_l);
+                    let ram_read = ram.get_rp_ref(self.reg_h, self.reg_l);
+                    Cpu::ld_r8_r8(ram_read, &mut self.reg_l);
                 },
                 0x76 => {self.halt();},
                 0x77 => {Cpu::ld_r8_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_a);},
@@ -1811,4 +1811,9 @@ impl Cpu
     // #[allow(dead_code)]
     // fn aux_get_pc(&self) -> ProgramCounter { self.pc }
 
+}
+
+impl Default for Cpu
+{
+    fn default() -> Self { Self::new() }
 }

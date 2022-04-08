@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod alu_tests
 {
-    use crate::cpu::{self, *};
+    use crate::cpu::*;
 
     #[test]
     fn test_aux_inc_16()

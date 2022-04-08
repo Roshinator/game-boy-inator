@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod ld_tests
 {
-    use crate::cpu::{self, *};
+    use crate::cpu::*;
 
     #[test]
     fn test_ld_r16_16()

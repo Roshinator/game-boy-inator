@@ -72,13 +72,12 @@ impl Ram
 {
     pub fn new() -> Ram
     {
-        let ram = Ram
+        Ram
         {
             mem: [0; 0x10000],
             boot_rom_enabled: true,
             dma: Dma { delay_start: false, pending_source: 0, source: 0, active: false }
-        };
-        return ram;
+        }
     }
 
     pub fn load_rom(&mut self, rom: &Rom)
@@ -187,6 +186,11 @@ impl Ram
     {
         self.mem[IF as usize] = !(!self.mem[IF as usize] | interrupt.bits);
     }
+}
+
+impl Default for Ram
+{
+    fn default() -> Self { Self::new() }
 }
 
 // impl Index<u16> for Ram

@@ -45,7 +45,7 @@ impl Rom
         let _result = f.read_to_end(&mut bytes);
         let mut rom = Rom
         {
-            bytes: bytes,
+            bytes,
             mbc_model: MBCModel::MbcNone,
             rom_size: 0,
             ram_size: 0,
@@ -59,12 +59,9 @@ impl Rom
         for i in 0..16
         {
             let x = rom.bytes[0x134 + i];
-            if x <= 127
+            if x <= 127 && !x.is_ascii_control()
             {
-                if !x.is_ascii_control()
-                {
-                    ttl.push(x);
-                }
+                ttl.push(x);
             }
         }
         rom.title = match String::from_utf8(ttl)
@@ -122,7 +119,7 @@ impl Rom
         //Print ROM details
         println!("{:?}", rom);
         frontend.borrow_mut().receive_rom_information(&rom.title);
-        return rom;
+        rom
     }
 }
 

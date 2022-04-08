@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod bitwise_tests
 {
-    use crate::cpu::{self, *};
+    use crate::cpu::*;
 
     #[test]
     fn test_rlc_r8()

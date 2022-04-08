@@ -26,6 +26,7 @@ mod jump_branch_tests
         assert!(!proc.pc.should_increment);
     }
 
+    #[test]
     fn test_jp_nflag_pc_16()
     {
         let mut proc = Cpu::new();

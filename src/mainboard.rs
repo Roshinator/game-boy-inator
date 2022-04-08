@@ -74,12 +74,9 @@ impl Mainboard
 
                     self.m_cycles += 1;
                 }
-                else //M-cycle-neg (1,048,576 hz)
+                else if !self.cpu.halted //M-cycle-neg (1,048,576 hz)
                 {
-                    if !self.cpu.halted
-                    {
-                        self.timer.execute(&mut self.ram, self.m_cycles);
-                    }
+                    self.timer.execute(&mut self.ram, self.m_cycles);
                 }
 
                 if self.cpu.stopped
