@@ -764,7 +764,7 @@ impl Cpu
 
     fn call_flag_16(ram: &mut Ram, flag: CpuFlags, msh: u8, lsh: u8, pc: &mut ProgramCounter, sp: &mut u16, flags: &mut CpuFlags)
     {
-        if !flags.contains(flag)
+        if flags.contains(flag)
         {
             Cpu::call_16(ram, msh, lsh, pc, sp);
         }
@@ -788,7 +788,7 @@ impl Cpu
 
     fn ret_flag(ram: &mut Ram, pc: &mut ProgramCounter, sp: &mut u16, flag: CpuFlags, flags: &mut CpuFlags)
     {
-        if !flags.contains(flag)
+        if flags.contains(flag)
         {
             Cpu::ret(ram, pc, sp);
         }
