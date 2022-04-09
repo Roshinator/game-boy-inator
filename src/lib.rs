@@ -8,6 +8,7 @@ pub mod ppu;
 mod rom;
 mod timer;
 
+#[cfg(test)]
 mod tests;
 
 type HardwareHandle = Rc<RefCell<dyn crate::Frontend>>;
