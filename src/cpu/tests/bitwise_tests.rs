@@ -3,39 +3,39 @@ use crate::cpu::*;
 #[test]
 fn test_rlc_r8()
 {
-    let mut cpu = Cpu::new();
-    cpu.regs[REG_A] = 0b01000000;
+    let mut proc = Cpu::new();
+    proc.reg_a = 0b01000000;
     //Test basic rotate
-    cpu.rlc_r8(REG_A);
-    assert_eq!(cpu.regs[REG_A], 0b10000000);
-    assert_eq!(cpu.regs[REG_F], CpuFlags::empty().bits);
+    Cpu::rlc_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0b10000000);
+    assert_eq!(proc.reg_f, CpuFlags::empty());
     //Test wrapping
-    cpu.rlc_r8(REG_A);
-    assert_eq!(cpu.regs[REG_A], 0b00000001);
-    assert_eq!(cpu.regs[REG_F], CpuFlags::FLAG_C.bits);
+    Cpu::rlc_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0b00000001);
+    assert_eq!(proc.reg_f, CpuFlags::FLAG_C);
     //Test zero
-    cpu.regs[REG_A] = 0b00000000;
-    cpu.rlc_r8(REG_A);
-    assert_eq!(cpu.regs[REG_A], 0b00000000);
-    assert_eq!(cpu.regs[REG_F], CpuFlags::FLAG_Z.bits);
+    proc.reg_a = 0b00000000;
+    Cpu::rlc_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0b00000000);
+    assert_eq!(proc.reg_f, CpuFlags::FLAG_Z);
 }
 
 #[test]
 fn test_rlca()
 {
-    let mut cpu = Cpu::new();
-    cpu.regs[REG_A] = 0b01000000;
+    let mut proc = Cpu::new();
+    proc.reg_a = 0b01000000;
     //Test basic rotate
-    cpu.rlca();
-    assert_eq!(cpu.regs[REG_A], 0b10000000);
-    assert_eq!(cpu.regs[REG_F], CpuFlags::empty().bits);
+    Cpu::rlca(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0b10000000);
+    assert_eq!(proc.reg_f, CpuFlags::empty());
     //Test wrapping
-    cpu.rlca();
-    assert_eq!(cpu.regs[REG_A], 0b00000001);
-    assert_eq!(cpu.regs[REG_F], CpuFlags::FLAG_C.bits);
+    Cpu::rlca(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0b00000001);
+    assert_eq!(proc.reg_f, CpuFlags::FLAG_C);
     //Test zero
-    cpu.regs[REG_A] = 0b00000000;
-    cpu.rlca();
-    assert_eq!(cpu.regs[REG_A], 0b00000000);
-    assert_eq!(cpu.regs[REG_F], CpuFlags::empty().bits);
+    proc.reg_a = 0b00000000;
+    Cpu::rlca(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0b00000000);
+    assert_eq!(proc.reg_f, CpuFlags::empty());
 }
