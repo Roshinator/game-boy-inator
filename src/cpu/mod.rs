@@ -177,8 +177,6 @@ impl Cpu
         *sp = u16::from_le_bytes([*lsh, *msh]);
     }
 
-    // TODO: See if the flags are modified
-
     ///Returns (lsh, msh)
     fn aux_inc_16(msh: u8, lsh: u8) -> (u8, u8)
     {
@@ -189,6 +187,7 @@ impl Cpu
 
     fn inc_r16(msh: &mut u8, lsh: &mut u8)
     {
+        //Flags not supposed to be modified
         let lsh_result = lsh.overflowing_add(1);
         *lsh = lsh_result.0;
         let msh_result = msh.overflowing_add(lsh_result.1 as u8);
@@ -197,32 +196,40 @@ impl Cpu
 
     fn inc_sp(sp: &mut u16)
     {
+        //Flags not supposed to be modified
         let result = u16::overflowing_add(*sp, 1);
         *sp = result.0;
     }
 
     fn inc_r8(reg: &mut u8, flags: &mut CpuFlags)
     {
+        let half_carry_pre = (*reg ^ 1) & (1 << 4);
         let result = reg.overflowing_add(1);
+        let half_carry_post = result.0 & (1 << 4);
+
         *reg = result.0;
 
         flags.set(CpuFlags::FLAG_Z, result.0 == 0);
         flags.set(CpuFlags::FLAG_N, false);
-        flags.set(CpuFlags::FLAG_H, result.1);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
     }
 
     fn dec_r8(reg: &mut u8, flags: &mut CpuFlags)
     {
+        let half_carry_pre = (*reg ^ 1) & (1 << 4);
         let result = reg.overflowing_sub(1);
+        let half_carry_post = result.0 & (1 << 4);
+
         *reg = result.0;
 
         flags.set(CpuFlags::FLAG_Z, result.0 == 0);
         flags.set(CpuFlags::FLAG_N, true);
-        flags.set(CpuFlags::FLAG_H, result.1);
+        flags.set(CpuFlags::FLAG_H, half_carry_pre != half_carry_post);
     }
 
     fn dec_r16(msh: &mut u8, lsh: &mut u8)
     {
+        //Flags not supposed to be modified
         let lsh_result = lsh.overflowing_sub(1);
         *lsh = lsh_result.0;
         let msh_result = msh.overflowing_sub(lsh_result.1 as u8);
@@ -231,6 +238,7 @@ impl Cpu
 
     fn dec_sp(sp: &mut u16)
     {
+        //Flags not supposed to be modified
         let result = u16::overflowing_sub(*sp, 1);
         *sp = result.0;
     }

@@ -42,16 +42,47 @@ fn test_inc_sp()
 fn test_inc_r8()
 {
     let mut proc = Cpu::new();
-    todo!();
-    //INCS cant be performed, flags not modified
+    //Test behavior
+    proc.reg_f = CpuFlags::empty();
+    proc.reg_a = 2;
+    Cpu::inc_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 3);
+    assert_eq!(proc.reg_f, CpuFlags::empty());
+    //Test H flag
+    proc.reg_a = 0b00001111;
+    Cpu::inc_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0b00010000);
+    assert_eq!(proc.reg_f, CpuFlags::FLAG_H);
+    //Test Z flag
+    proc.reg_f = CpuFlags::empty();
+    proc.reg_a = u8::MAX; //Trigger an overflow to reach 0 (guaranteed H flag too)
+    Cpu::inc_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0);
+    assert_eq!(proc.reg_f, CpuFlags::FLAG_Z | CpuFlags::FLAG_H);
 }
 
 #[test]
 fn test_dec_r8()
 {
     let mut proc = Cpu::new();
-    todo!();
-    //INCS cant be performed, flags not modified
+    //Test behavior
+    proc.reg_f = CpuFlags::empty();
+    proc.reg_a = 3;
+    Cpu::dec_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 2);
+    assert_eq!(proc.reg_f, CpuFlags::FLAG_N);
+    //Test H flag
+    proc.reg_f = CpuFlags::empty();
+    proc.reg_a = 0b00010000;
+    Cpu::dec_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0b00001111);
+    assert_eq!(proc.reg_f, CpuFlags::FLAG_N | CpuFlags::FLAG_H);
+    //Test Z flag
+    proc.reg_f = CpuFlags::empty();
+    proc.reg_a = 1;
+    Cpu::dec_r8(&mut proc.reg_a, &mut proc.reg_f);
+    assert_eq!(proc.reg_a, 0);
+    assert_eq!(proc.reg_f, CpuFlags::FLAG_N | CpuFlags::FLAG_Z);
 }
 
 #[test]
