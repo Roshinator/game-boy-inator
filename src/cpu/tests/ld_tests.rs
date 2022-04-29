@@ -82,3 +82,42 @@ fn test_ld_sp_r16()
     Cpu::ld_sp_r16(&mut proc.sp, &mut proc.reg_h, &mut proc.reg_l);
     assert_eq!(proc.sp, 0x6942);
 }
+
+#[test]
+fn test_push_r16()
+{
+    let mut proc = Cpu::new();
+    let mut mem = Ram::new();
+    proc.sp = 0xFFFF;
+    (proc.reg_a, proc.reg_b) = (0x42, 0x69); //MSH, LSH
+    Cpu::push_r16(&mut mem, &mut proc.sp, &mut proc.reg_a, &mut proc.reg_b);
+    assert_eq!(proc.sp, 0xFFFD);
+    assert_eq!(mem.read(0xFFFE), 0x42);
+    assert_eq!(mem.read(0xFFFD), 0x69);
+}
+
+#[test]
+fn test_push_pc()
+{
+    let mut proc = Cpu::new();
+    let mut mem = Ram::new();
+    proc.sp = 0xFFFF;
+    proc.pc.reg = 0x4269;
+    Cpu::push_pc(&mut mem, &mut proc.sp, &mut proc.pc);
+    assert_eq!(proc.sp, 0xFFFD);
+    assert_eq!(mem.read(0xFFFE), 0x42);
+    assert_eq!(mem.read(0xFFFD), 0x69);
+}
+
+#[test]
+fn test_pop_r16()
+{
+    let mut proc = Cpu::new();
+    let mut mem = Ram::new();
+    mem.write(0xFFFD, 0x69); //LSH
+    mem.write(0xFFFE, 0x42); //MSH
+    proc.sp = 0xFFFD;
+    Cpu::pop_r16(&mut mem, &mut proc.sp, &mut proc.reg_a, &mut proc.reg_b);
+    assert_eq!(proc.sp, 0xFFFF);
+    assert_eq!((proc.reg_a, proc.reg_b), (0x42, 0x69));
+}

@@ -53,3 +53,35 @@ fn aux_read_immediate_data()
     let result = cpu.aux_read_immediate_data(&mut ram);
     assert_eq!(result, 0x02);
 }
+
+#[test]
+fn test_reti()
+{
+    let mut proc = Cpu::new();
+    let mut mem = Ram::new();
+    mem.write(0xFFFD, 0x69); //LSH
+    mem.write(0xFFFE, 0x42); //MSH
+    proc.sp = 0xFFFD;
+    Cpu::reti(&mut mem, &mut proc.sp, &mut proc.pc, &mut proc.ime);
+    assert_eq!(proc.sp, 0xFFFF);
+    assert_eq!(proc.pc.reg, 0x4269);
+    assert_eq!(proc.ime, true);
+}
+
+#[test]
+fn test_ei()
+{
+    let mut proc = Cpu::new();
+    proc.ime = false;
+    Cpu::ei(&mut proc.ime);
+    assert_eq!(proc.ime, true);
+}
+
+#[test]
+fn test_di()
+{
+    let mut proc = Cpu::new();
+    proc.ime = true;
+    Cpu::di(&mut proc.ime);
+    assert_eq!(proc.ime, false);
+}
