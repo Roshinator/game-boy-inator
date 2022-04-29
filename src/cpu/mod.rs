@@ -944,11 +944,13 @@ impl Cpu
         flags.set(CpuFlags::FLAG_H, false);
     }
 
-    fn swap_r8(p1: &mut u8)
+    fn swap_r8(p1: &mut u8, flags: &mut CpuFlags)
     {
         let lower_to_upper_half = *p1 << 4u8;
         let upper_to_lower_half = *p1 >> 4u8;
         *p1 = lower_to_upper_half | upper_to_lower_half;
+        *flags = CpuFlags::empty();
+        flags.set(CpuFlags::FLAG_Z, *p1 == 0);
     }
 
     fn bit_r8(p1: u8, p2: &mut u8, flags: &mut CpuFlags)
@@ -1587,14 +1589,14 @@ impl Cpu
                 0x2D => {Cpu::sra_r8(&mut self.reg_l, &mut self.reg_f);},
                 0x2E => {Cpu::sra_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
                 0x2F => {Cpu::sra_r8(&mut self.reg_a, &mut self.reg_f);},
-                0x30 => {Cpu::swap_r8(&mut self.reg_b);},
-                0x31 => {Cpu::swap_r8(&mut self.reg_c);},
-                0x32 => {Cpu::swap_r8(&mut self.reg_d);},
-                0x33 => {Cpu::swap_r8(&mut self.reg_e);},
-                0x34 => {Cpu::swap_r8(&mut self.reg_h);},
-                0x35 => {Cpu::swap_r8(&mut self.reg_l);},
-                0x36 => {Cpu::swap_r8(ram.get_rp_ref(self.reg_h, self.reg_l));},
-                0x37 => {Cpu::swap_r8(&mut self.reg_a);},
+                0x30 => {Cpu::swap_r8(&mut self.reg_b, &mut self.reg_f);},
+                0x31 => {Cpu::swap_r8(&mut self.reg_c, &mut self.reg_f);},
+                0x32 => {Cpu::swap_r8(&mut self.reg_d, &mut self.reg_f);},
+                0x33 => {Cpu::swap_r8(&mut self.reg_e, &mut self.reg_f);},
+                0x34 => {Cpu::swap_r8(&mut self.reg_h, &mut self.reg_f);},
+                0x35 => {Cpu::swap_r8(&mut self.reg_l, &mut self.reg_f);},
+                0x36 => {Cpu::swap_r8(ram.get_rp_ref(self.reg_h, self.reg_l), &mut self.reg_f);},
+                0x37 => {Cpu::swap_r8(&mut self.reg_a, &mut self.reg_f);},
                 0x38 => {Cpu::srl_r8(&mut self.reg_b, &mut self.reg_f);},
                 0x39 => {Cpu::srl_r8(&mut self.reg_c, &mut self.reg_f);},
                 0x3A => {Cpu::srl_r8(&mut self.reg_d, &mut self.reg_f);},
