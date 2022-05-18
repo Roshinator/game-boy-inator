@@ -1537,8 +1537,6 @@ impl Cpu
         {
             let cb_instruction = self.aux_read_immediate_data(ram);
 
-            // println!("Instruction: 0x{:02X?}, Program Counter: 0x{:02X?}", cb_instruction, self.pc.reg);
-
             match cb_instruction //CB Prefix
             {
                 0x00 => {Cpu::rlc_r8(&mut self.reg_b, &mut self.reg_f);},

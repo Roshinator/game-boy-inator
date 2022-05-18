@@ -51,11 +51,12 @@ pub struct Sprite
 }
 pub struct Ppu
 {
-    frame_progress:u64,
+    frame_progress: u64,
     buffer: [[u8;SCREEN_HEIGHT];SCREEN_WIDTH],
     new_frame: bool,
     sprite_buffer: Vec<Sprite>,
-    current_x: u8
+    current_x: u8,
+    frame_count: u64
 }
 
 impl Ppu
@@ -68,7 +69,8 @@ impl Ppu
             buffer: [[0; SCREEN_HEIGHT]; SCREEN_WIDTH],
             new_frame: false,
             sprite_buffer: Default::default(),
-            current_x: 0
+            current_x: 0,
+            frame_count: 0
         }
     }
 
@@ -87,7 +89,8 @@ impl Ppu
         {
             #[cfg(feature = "ppu-debug")]
             println!("Drawing screen");
-            hardware_handle.borrow_mut().video_update(&self.buffer);
+            hardware_handle.borrow_mut().video_update(&self.buffer, self.frame_count);
+            self.frame_count += 1;
         }
     }
 

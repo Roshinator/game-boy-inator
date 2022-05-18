@@ -16,5 +16,5 @@ pub trait Frontend
 {
     fn receive_rom_information(&mut self, title: &str);
     fn event_poll(&mut self);
-    fn video_update(&mut self, buffer: &[[u8; ppu::SCREEN_HEIGHT];ppu::SCREEN_WIDTH]);
+    fn video_update(&mut self, buffer: &[[u8; ppu::SCREEN_HEIGHT];ppu::SCREEN_WIDTH], frame_count: u64);
 }
