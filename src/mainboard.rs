@@ -48,7 +48,7 @@ impl Mainboard
         }
     }
 
-    pub fn execute_frame(&mut self)
+    pub fn execute_frame(&mut self) -> bool
     {
         for _ in 0..ppu::CYCLES_PER_FRAME
         {
@@ -85,6 +85,6 @@ impl Mainboard
                 }
             }
         }
-        self.hardware_handle.borrow_mut().event_poll();
+        self.hardware_handle.borrow_mut().event_poll()
     }
 }
